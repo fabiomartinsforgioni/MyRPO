@@ -21,7 +21,7 @@ function validField(collection: Collection, key: string, value: unknown): boolea
   if (textFields[collection].has(key)) {
     return typeof value === 'string' && value.length <= 8000;
   }
-  if (collection === 'chamados' && (key === 'pendencia' || key === 'arquivado')) return typeof value === 'boolean';
+  if (collection === 'chamados' && (key === 'pendencia' || key === 'arquivado' || key === 'excluido')) return typeof value === 'boolean';
   if ((collection === 'chamados' && key === 'horasPrevistas') || (collection === 'projetos' && key === 'horasContratadas')) {
     return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
   }

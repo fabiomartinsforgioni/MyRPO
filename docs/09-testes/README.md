@@ -10,3 +10,5 @@ Em 24/11/2026, os dois testes de domínio, o build e o fluxo descrito no Edge pa
 O comando `npm test` também compila a API e executa o [teste de integração HTTP](../../tests/api.http.test.mjs) em loopback, cobrindo criação, consulta, atualização, histórico e validação dos cadastros.
 
 Integração Angular–NestJS validada no Edge com proxy: alternância entre origens, cadastro e edição via API, histórico após gravação, recarga, distribuição nas estatísticas e retorno aos dados previamente gravados no navegador.
+
+Quatro testes automatizados cobrem o domínio e o contrato HTTP, incluindo cronômetro único, bloqueio de finalização, vínculo, histórico, pausa, retomada e justificativa de horas não faturáveis. No Edge foram verificados o ciclo do cronômetro, gráficos de horas, relatório interno, PDF externo sem descrição interna e restauração de chamado pela lixeira. O caderno geral em Excel será consolidado após a implementação dos itens restantes.

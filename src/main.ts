@@ -1,16 +1,21 @@
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { registerLocaleData } from '@angular/common';
+import localePt from '@angular/common/locales/pt';
 import { FormsModule } from '@angular/forms';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet, provideRouter, withHashLocation } from '@angular/router';
 import { PoButtonModule } from '@po-ui/ng-components';
 
-import { allowedStatuses, priorities, statuses, types } from './domain';
+import { allowedStatuses, priorities, statuses, timeTotals, types } from './domain';
 import type { Collection, Row } from './domain';
 import { WorkspaceStore } from './workspace-store';
 import { StatisticsComponent } from './statistics';
+import { HoursComponent } from './hours';
+import { ReportsComponent } from './reports';
 
+registerLocaleData(localePt);
 const workspace = new WorkspaceStore();
 const menu = [
   ['dashboard', 'Dashboard', 'an an-fill an-house'], ['clientes', 'Clientes', 'an an-fill an-users'], ['chamados', 'Chamados', 'an an-fill an-ticket'],
@@ -58,7 +63,7 @@ const fields: Record<Collection, Field[]> = {
 
 @Component({
   standalone: true,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, DecimalPipe, RouterLink],
   template: `
     <section class="heading dashboard-heading"><div><h1>Dashboard</h1><p>Acompanhe seus atendimentos e projetos.</p></div>
       <a class="primary" routerLink="/chamados" [queryParams]="{novo: 1}"><span class="action-label">Novo chamado</span><span class="action-icon" aria-hidden="true"><span class="an an-fill an-plus"></span></span></a>
@@ -74,15 +79,34 @@ const fields: Record<Collection, Field[]> = {
       } @empty { <p class="empty">As atividades aparecem aqui quando você salva um cadastro.</p> }
     </section>
     <section class="panel dashboard-links"><h2>Operação</h2>
+      <p>Horas trabalhadas <strong>{{ hours.total | number:'1.2-4':'pt-BR' }} h</strong></p>
+      <p>Horas faturáveis <strong>{{ hours.billed | number:'1.2-4':'pt-BR' }} h</strong></p>
       <a routerLink="/clientes">Clientes <span aria-hidden="true">→</span></a>
       <a routerLink="/chamados">Chamados <span aria-hidden="true">→</span></a>
       <a routerLink="/projetos">Projetos <span aria-hidden="true">→</span></a>
-      <a routerLink="/horas">Controle de horas <small>Planejado</small></a>
+      <a routerLink="/horas">Controle de horas <small>{{ timerStatus }}</small></a>
     </section></div>
+    @if (projectsNearLimit.length) {
+      <section class="panel">
+        <h2>Projetos próximos do limite contratado</h2>
+        @for (project of projectsNearLimit; track project.id) {
+          <div class="event"><span>{{ project.nome }}</span>
+            <strong>{{ project.billed | number:'1.2-4':'pt-BR' }} de {{ project.limit }} h</strong></div>
+        }
+      </section>
+    }
   `,
 })
 class DashboardComponent {
-  private readonly active = workspace.state.chamados.filter(row => !row.arquivado);
+  readonly hours = timeTotals(workspace.state.hours ?? []);
+  readonly projectsNearLimit = workspace.state.projetos.flatMap(project => {
+    const limit = project.horasContratadas;
+    if (project.situacao !== 'Ativo' || typeof limit !== 'number' || limit <= 0) return [];
+    const { billed } = timeTotals((workspace.state.hours ?? []).filter(entry => entry.projectId === project.id));
+    return billed / limit >= 0.8 ? [{ id: project.id, nome: project.nome, billed, limit }] : [];
+  });
+  readonly timerStatus = workspace.state.timer ? (workspace.state.timer.runningSince === null ? 'Pausado' : 'Em execução') : 'Sem cronômetro ativo';
+  private readonly active = workspace.state.chamados.filter(row => !row.arquivado && !row.excluido);
   readonly recent = workspace.state.history.slice(0, 8);
   readonly metrics = [
     ...statuses.map((label, index) => ({ label, tone: index, value: this.active.filter(row => row.status === label).length })),
@@ -94,14 +118,15 @@ class DashboardComponent {
 
 @Component({
   standalone: true,
-  imports: [FormsModule, DatePipe, PoButtonModule],
+  imports: [FormsModule, DatePipe, DecimalPipe, PoButtonModule],
   templateUrl: './records.html',
 })
 class RecordsComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly changeDetector = inject(ChangeDetectorRef);
   readonly collection = this.route.snapshot.data['collection'] as Collection;
-  readonly title = titles[this.collection];
+  readonly trash = Boolean(this.route.snapshot.data['trash']);
+  readonly title = this.trash ? 'Lixeira' : titles[this.collection];
   readonly fields = fields[this.collection];
   readonly tabs = tabs[this.collection];
   readonly priorities = priorities;
@@ -120,7 +145,7 @@ class RecordsComponent {
   readonly available = workspace.available;
 
   constructor() {
-    if (this.route.snapshot.queryParamMap.has('novo')) this.start();
+    if (!this.trash && this.route.snapshot.queryParamMap.has('novo')) this.start();
   }
 
   get clients() { return workspace.state.clientes; }
@@ -133,9 +158,14 @@ class RecordsComponent {
       (!this.status || (row.status ?? row.situacao) === this.status) &&
       (!this.priority || row.prioridade === this.priority) &&
       (!this.clientFilter || row.clienteId === this.clientFilter) &&
-      (this.collection !== 'chamados' || this.showArchived === Boolean(row.arquivado)));
+      (this.collection !== 'chamados' || (this.trash ? Boolean(row.excluido) : !row.excluido && this.showArchived === Boolean(row.arquivado))));
   }
-  get linked() { return workspace.state.chamados.filter(row => row.projetoId === this.selected?.id); }
+  get linked() { return workspace.state.chamados.filter(row => row.projetoId === this.selected?.id && !row.excluido); }
+  get hours() {
+    return (workspace.state.hours ?? []).filter(entry => this.collection === 'projetos'
+      ? entry.projectId === this.selected?.id : entry.ticketId === this.selected?.id);
+  }
+  get hourTotals() { return timeTotals(this.hours); }
   get history() { return this.selected ? workspace.trail(this.selected.id) : []; }
 
   projectName(id: Row[string]) { return workspace.state.projetos.find(row => row.id === id)?.nome ?? '—'; }
@@ -162,6 +192,21 @@ class RecordsComponent {
     this.edit = null;
     this.selected = row;
     this.tab = 'Visão geral';
+  }
+
+  async changeTrash() {
+    if (!this.selected || this.saving) return;
+    this.saving = true;
+    try {
+      await workspace.save('chamados', { ...this.selected, excluido: !this.trash });
+      this.selected = null;
+      this.notice = this.trash ? 'Chamado restaurado.' : 'Chamado movido para a lixeira.';
+    } catch (error) {
+      this.notice = error instanceof Error ? error.message : 'Não foi possível atualizar a lixeira.';
+    } finally {
+      this.saving = false;
+      this.changeDetector.markForCheck();
+    }
   }
 
   async save() {
@@ -218,6 +263,25 @@ class SettingsComponent {
 class StatisticsPageComponent {
   get snapshot() { return workspace.state; }
 }
+
+@Component({
+  standalone: true,
+  imports: [HoursComponent],
+  template: '<myrpo-hours [store]="store" />',
+})
+class HoursPageComponent {
+  readonly store = workspace;
+}
+
+@Component({
+  standalone: true,
+  imports: [ReportsComponent],
+  template: '<myrpo-reports [snapshot]="snapshot" [external]="external" />',
+})
+class ReportsPageComponent {
+  readonly external = Boolean(inject(ActivatedRoute).snapshot.data['external']);
+  get snapshot() { return workspace.state; }
+}
 @Component({
   selector: 'myrpo-app',
   standalone: true,
@@ -271,9 +335,13 @@ workspace.initialize().then(() => bootstrapApplication(AppComponent, {
       { path: 'dashboard', component: DashboardComponent },
       ...(['clientes', 'chamados', 'projetos'] as const).map(collection =>
         ({ path: collection, component: RecordsComponent, data: { collection } })),
+      { path: 'horas', component: HoursPageComponent },
+      { path: 'relatorios-internos', component: ReportsPageComponent },
+      { path: 'relatorios-clientes', component: ReportsPageComponent, data: { external: true } },
       { path: 'estatisticas', component: StatisticsPageComponent },
+      { path: 'lixeira', component: RecordsComponent, data: { collection: 'chamados', trash: true } },
       { path: 'configuracoes', component: SettingsComponent },
-      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas').map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
+      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas' && path !== 'horas' && path !== 'lixeira' && !path.startsWith('relatorios-')).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
       { path: '**', redirectTo: 'dashboard' },
     ], withHashLocation()),
   ],

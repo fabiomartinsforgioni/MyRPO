@@ -41,6 +41,18 @@ export class WorkspaceStore {
     return result.record;
   }
 
+  async applyHours(command: unknown): Promise<void> {
+    if (this.mode === 'local') {
+      this.local.applyHours(command);
+      return;
+    }
+    this.remote = await this.request<Snapshot>('/workspace/timer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(command),
+    });
+  }
+
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {

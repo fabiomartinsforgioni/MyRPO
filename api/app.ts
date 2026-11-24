@@ -34,6 +34,16 @@ class RecordsController {
   @Get('workspace')
   snapshot() { return this.workspace.state; }
 
+  @Post('workspace/timer')
+  timer(@Body() command: unknown) {
+    try {
+      return this.workspace.applyHours(command);
+    } catch (error) {
+      if (error instanceof Error) throw new UnprocessableEntityException(error.message);
+      throw error;
+    }
+  }
+
   @Get(':resource')
   list(@Param('resource') resource: string) {
     return this.workspace.state[resolveCollection(resource)];

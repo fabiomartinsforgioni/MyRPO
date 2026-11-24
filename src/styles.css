@@ -188,3 +188,17 @@ thead { color: var(--muted); }
 .statistics-row span { overflow-wrap: anywhere; }
 .statistics-track { grid-column: 1 / -1; height: 5px; background: var(--badge); }
 .statistics-track span { display: block; height: 100%; background: var(--accent); }
+
+.timer-value { font-size: clamp(29px, 5vw, 46px); font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.timer-value small { font-size: 14px; font-weight: 500; color: var(--muted); }
+
+.report-total { display: flex; justify-content: space-between; margin-top: 16px; color: var(--text); }
+@media print {
+  .shell:has(.client-report) { display: block; background: white; color: black; color-scheme: light; }
+  .shell:has(.client-report) aside, .shell:has(.client-report) header, .client-report .heading, .client-report .report-filters { display: none; }
+  .shell:has(.client-report) main { padding: 0; }
+  .client-report .report-document { margin: 0; border: 0; background: white; padding: 0; }
+  .shell .client-report :is(h2, p, th, td) { color: black; }
+  .client-report :is(th, td) { border-color: #b4bac4; }
+  .client-report tr { break-inside: avoid; }
+}

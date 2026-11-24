@@ -43,6 +43,20 @@ test('executa o ciclo de cliente, projeto e chamado pela API', async t => {
   await request('GET', 'chamados/inexistente', undefined, 404);
   await request('GET', 'inventario', undefined, 404);
 
+  const timer = await request('POST', 'workspace/timer', {
+    action: 'start', ticketId: chamado.id, activity: 'Análise',
+  }, 201);
+  assert.equal(timer.timer.ticketId, chamado.id);
+  await request('PATCH', 'chamados/' + chamado.id, { status: 'Finalizado' }, 422);
+  await request('POST', 'workspace/timer', { action: 'pause' }, 201);
+  await request('POST', 'workspace/timer', { action: 'resume' }, 201);
+  const hours = await request('POST', 'workspace/timer', {
+    action: 'finish', internal: 'Análise interna', external: 'Diagnóstico concluído', billable: true,
+  }, 201);
+  assert.equal(hours.timer, null);
+  assert.equal(hours.hours[0].projectId, projeto.id);
+  assert.equal(hours.hours[0].billable, true);
+
   const saved = await request('PATCH', 'clientes/' + cliente.id + '?include=workspace', { situacao: 'Inativo' });
   assert.equal(saved.record.situacao, 'Inativo');
   assert.deepEqual(await request('GET', 'workspace'), saved.workspace);

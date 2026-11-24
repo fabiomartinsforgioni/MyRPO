@@ -13,6 +13,7 @@ Base `/api/v1`. Os recursos disponíveis são `clientes`, `chamados` e `projetos
 | `GET /{recurso}` | 200 com a lista |
 | `GET /{recurso}/{id}` | 200 com o cadastro |
 | `GET /{recurso}/{id}/historico` | 200 com as atividades do cadastro |
+| `POST /workspace/timer` | 201 com o snapshot após a ação de cronômetro |
 | `POST /{recurso}` | 201 com o cadastro criado |
 | `PATCH /{recurso}/{id}` | 200 com o cadastro atualizado |
 
