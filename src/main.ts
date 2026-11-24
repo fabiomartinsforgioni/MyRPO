@@ -183,7 +183,7 @@ class PlannedComponent {
   template: `
     <div class="shell" [class.light]="light" [class.collapsed]="collapsed">
       <aside id="workspace-menu">
-        <a class="brand" routerLink="/dashboard" aria-label="MyRPO · Dashboard"><img [src]="collapsed ? 'assets/MyRPO-icon.png' : 'assets/MyRPO.png'" alt=""></a>
+        <a class="brand" routerLink="/dashboard" aria-label="MyRPO · Dashboard"><img [src]="collapsed ? 'assets/MyRPO-icon.png' : light ? 'assets/MyRPO.png' : 'assets/MyRPO-dark.png'" alt=""></a>
         <nav aria-label="Menu principal">
           @for (item of menu; track item[0]) {
             <a [routerLink]="item[0]" routerLinkActive="active" ariaCurrentWhenActive="page" [attr.aria-label]="item[1]"
