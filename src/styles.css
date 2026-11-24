@@ -1,31 +1,34 @@
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
 .shell {
-  --bg: #0b1220; --panel: #121d2e; --nav: #0f1929; --line: #293950; --text: #edf4ff;
-  --muted: #a9bdd6; --accent: #66e3c3; --ink: #102927; --badge: #18343c; --error: #ffaaaa;
+  --bg: #0b1826; --panel: #13283c; --nav: #102c4a; --line: #365676; --text: #f5f9ff;
+  --muted: #bed2e8; --accent: #65caff; --ink: #09263e; --badge: #1b4164; --error: #ffaaaa;
   display: grid; grid-template-columns: 246px minmax(0, 1fr); min-height: 100vh;
   background: var(--bg); color: var(--text); color-scheme: dark;
 }
 .shell.light {
-  --bg: #eef4f7; --panel: #fff; --nav: #e5eef3; --line: #becdd8; --text: #152e40;
-  --muted: #445e70; --accent: #006452; --ink: #fff; --badge: #e1f1eb; --error: #9b2525;
+  --bg: #edf4fb; --panel: #fff; --nav: #e1effc; --line: #b8cee3; --text: #102f4c;
+  --muted: #3e5870; --accent: #005db5; --ink: #fff; --badge: #cfe8ff; --error: #9b2525;
   color-scheme: light;
 }
 .shell.collapsed { grid-template-columns: 66px minmax(0, 1fr); }
 aside { background: var(--nav); border-right: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 10px; padding: 18px 15px; color: var(--text); font-size: 21px; text-decoration: none; }
-.brand img { width: 35px; height: 35px; object-fit: contain; border-radius: 8px; }
+.brand { display: grid; place-items: center; min-height: 64px; padding: 4px 8px; background: #f2f8ff; border-bottom: 1px solid var(--line); }
+.brand img { display: block; width: min(100%, 170px); height: auto; }
+.collapsed .brand img { width: 36px; }
 nav { display: grid; gap: 5px; padding: 8px; }
 nav a { display: flex; align-items: center; gap: 10px; color: var(--muted); text-decoration: none; border-radius: 8px; padding: 10px 12px; }
 nav a span:first-child { width: 22px; text-align: center; font-size: 18px; flex: 0 0 22px; }
 nav a:hover, nav a.active { background: var(--badge); color: var(--accent); }
-.collapsed nav a span:last-child, .collapsed .brand strong { display: none; }
+nav a.active { box-shadow: inset 3px 0 var(--accent); font-weight: 650; }
+.collapsed nav a span:last-child { display: none; }
 header { height: 64px; display: flex; align-items: center; gap: 16px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 clamp(12px, 3vw, 36px); }
 .workspace { color: var(--muted); }
 .theme { margin-left: auto; }
 main { padding: clamp(14px, 3vw, 36px); max-width: 1450px; margin: auto; }
 .heading, .detail-head, .actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 .heading { margin-bottom: 22px; }
+.shell h1, .shell h2 { color: var(--text); }
 h1, h2, p { margin: 0 0 8px; }
 h1 { font-size: clamp(25px, 4vw, 38px); letter-spacing: -.035em; }
 h2 { font-size: 19px; }

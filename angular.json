@@ -21,7 +21,7 @@
             ],
             "assets": [
               {
-                "glob": "MyRPO.png",
+                "glob": "MyRPO*.png",
                 "input": "Logo",
                 "output": "assets"
               }
