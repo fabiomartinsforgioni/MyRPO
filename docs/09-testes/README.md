@@ -6,3 +6,5 @@
 - O [roteiro de demonstração](../../README.md#roteiro-de-demonstração) permite repetir o fluxo manualmente.
 
 Em 24/11/2026, os dois testes de domínio, o build e o fluxo descrito no Edge passaram.
+
+O comando `npm test` também compila a API e executa o [teste de integração HTTP](../../tests/api.http.test.mjs) em loopback, cobrindo criação, consulta, atualização, histórico e validação dos cadastros.

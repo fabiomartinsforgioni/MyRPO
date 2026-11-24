@@ -39,6 +39,7 @@ npm run build
 
 - Implementado no primeiro bloco: dashboard operacional, clientes, chamados, projetos, histórico, abas e persistência local.
 - Planejado: controle de horas, estatísticas, base de conhecimento, relatórios, configurações adicionais, lixeira e armazenamento de arquivos. As rotas desses módulos estão disponíveis como prévia de navegação.
-- Próxima etapa de arquitetura: API REST NestJS, PostgreSQL e workspaces.
+- Implementado no segundo bloco: [API REST NestJS em memória](docs/04-arquitetura/api-rest.md), executável em separado com `npm run start:api`.
+- Próxima etapa de arquitetura: integrar o Angular à API e evoluir a persistência para PostgreSQL com isolamento por workspace.
 
 [Documentação do projeto](docs/README.md) · [Aviso de propriedade intelectual](docs/11-propriedade-intelectual/README.md)
