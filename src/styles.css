@@ -180,3 +180,11 @@ thead { color: var(--muted); }
   .metrics { grid-template-columns: minmax(0, 1fr); }
   .dashboard-heading { align-items: start; }
 }
+
+.statistics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.statistics-grid .panel { margin: 0 0 14px; }
+.statistics-total strong { color: var(--text); }
+.statistics-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 13px; }
+.statistics-row span { overflow-wrap: anywhere; }
+.statistics-track { grid-column: 1 / -1; height: 5px; background: var(--badge); }
+.statistics-track span { display: block; height: 100%; background: var(--accent); }

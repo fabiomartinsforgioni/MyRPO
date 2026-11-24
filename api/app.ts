@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import {
-  Body, Controller, Get, Module, NotFoundException, Param, Patch, Post, UnprocessableEntityException,
+  Body, Controller, Get, Module, NotFoundException, Param, Patch, Post, Query, UnprocessableEntityException,
 } from '@nestjs/common';
 import type { NestApplicationOptions } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -31,6 +31,9 @@ class HealthController {
 class RecordsController {
   private readonly workspace = new Workspace(new MemoryRepository());
 
+  @Get('workspace')
+  snapshot() { return this.workspace.state; }
+
   @Get(':resource')
   list(@Param('resource') resource: string) {
     return this.workspace.state[resolveCollection(resource)];
@@ -48,16 +51,16 @@ class RecordsController {
   }
 
   @Post(':resource')
-  create(@Param('resource') resource: string, @Body() body: unknown) {
+  create(@Param('resource') resource: string, @Body() body: unknown, @Query('include') include?: string) {
     const collection = resolveCollection(resource);
-    return this.save(collection, recordInput(collection, body, true));
+    return this.save(collection, recordInput(collection, body, true), include);
   }
 
   @Patch(':resource/:id')
-  update(@Param('resource') resource: string, @Param('id') id: string, @Body() body: unknown) {
+  update(@Param('resource') resource: string, @Param('id') id: string, @Body() body: unknown, @Query('include') include?: string) {
     const collection = resolveCollection(resource);
     const current = this.findRecord(collection, id);
-    return this.save(collection, { ...current, ...recordInput(collection, body, false) });
+    return this.save(collection, { ...current, ...recordInput(collection, body, false) }, include);
   }
 
   private findRecord(collection: Collection, id: string): Row {
@@ -66,9 +69,10 @@ class RecordsController {
     return row;
   }
 
-  private save(collection: Collection, input: Partial<Row>) {
+  private save(collection: Collection, input: Partial<Row>, include?: string) {
     try {
-      return this.workspace.save(collection, input);
+      const record = this.workspace.save(collection, input);
+      return include === 'workspace' ? { record, workspace: this.workspace.state } : record;
     } catch (error) {
       if (error instanceof Error) throw new UnprocessableEntityException(error.message);
       throw error;

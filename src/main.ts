@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { bootstrapApplication } from '@angular/platform-browser';
@@ -6,11 +6,12 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet, provideRouter, withHashLocation } from '@angular/router';
 import { PoButtonModule } from '@po-ui/ng-components';
 
-import { Workspace, allowedStatuses, priorities, statuses, types } from './domain';
+import { allowedStatuses, priorities, statuses, types } from './domain';
 import type { Collection, Row } from './domain';
-import { LocalWorkspaceRepository } from './persistence';
+import { WorkspaceStore } from './workspace-store';
+import { StatisticsComponent } from './statistics';
 
-const workspace = new Workspace(new LocalWorkspaceRepository());
+const workspace = new WorkspaceStore();
 const menu = [
   ['dashboard', 'Dashboard', 'an an-fill an-house'], ['clientes', 'Clientes', 'an an-fill an-users'], ['chamados', 'Chamados', 'an an-fill an-ticket'],
   ['projetos', 'Projetos', 'an an-fill an-folder'], ['horas', 'Controle de horas', 'an an-fill an-clock'], ['estatisticas', 'Estatísticas', 'an an-fill an-chart-bar'],
@@ -98,6 +99,7 @@ class DashboardComponent {
 })
 class RecordsComponent {
   private readonly route = inject(ActivatedRoute);
+  private readonly changeDetector = inject(ChangeDetectorRef);
   readonly collection = this.route.snapshot.data['collection'] as Collection;
   readonly title = titles[this.collection];
   readonly fields = fields[this.collection];
@@ -114,6 +116,8 @@ class RecordsComponent {
   tab = 'Visão geral';
   error = '';
   notice = '';
+  saving = false;
+  readonly available = workspace.available;
 
   constructor() {
     if (this.route.snapshot.queryParamMap.has('novo')) this.start();
@@ -145,7 +149,7 @@ class RecordsComponent {
     this.error = '';
     this.edit = row ? { ...row } : this.collection === 'chamados'
       ? { nome: '', status: 'Aberto', tipo: 'Suporte', prioridade: 'Normal', clienteId: '', projetoId: '' }
-      : { nome: '', situacao: 'Ativo', clienteId: '' };
+      : { nome: '', situacao: 'Ativo' };
   }
 
   options(field: Field) {
@@ -160,14 +164,19 @@ class RecordsComponent {
     this.tab = 'Visão geral';
   }
 
-  save() {
-    if (!this.edit) return;
+  async save() {
+    if (!this.edit || this.saving) return;
+    this.saving = true;
     try {
-      const result = workspace.save(this.collection, this.edit);
+      const validFields = Object.fromEntries(this.fields.map(field => [field.key, this.edit?.[field.key]]));
+      const result = await workspace.save(this.collection, { ...validFields, id: this.edit.id });
       this.open(result);
       this.notice = 'Cadastro salvo.';
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'Não foi possível salvar o cadastro.';
+    } finally {
+      this.saving = false;
+      this.changeDetector.markForCheck();
     }
   }
 }
@@ -181,6 +190,34 @@ class PlannedComponent {
   readonly title = inject(ActivatedRoute).snapshot.data['title'] as string;
 }
 
+@Component({
+  standalone: true,
+  template: `
+    <section class="heading"><h1>Configurações</h1></section>
+    <section class="panel">
+      <h2>Origem dos cadastros</h2>
+      <p>Modo atual: {{ mode === 'api' ? 'API demonstrativa' : 'LocalStorage' }}.</p>
+      <p>O modo API usa os dados em memória do servidor. Os cadastros locais continuam disponíveis ao voltar para LocalStorage.</p>
+      <button type="button" (click)="changeMode()">{{ mode === 'api' ? 'Usar LocalStorage' : 'Usar API demonstrativa' }}</button>
+    </section>
+  `,
+})
+class SettingsComponent {
+  readonly mode = workspace.mode;
+
+  changeMode() {
+    localStorage.setItem('myrpo.persistence', this.mode === 'api' ? 'local' : 'api');
+    location.reload();
+  }
+}
+@Component({
+  standalone: true,
+  imports: [StatisticsComponent],
+  template: '<myrpo-statistics [snapshot]="snapshot" />',
+})
+class StatisticsPageComponent {
+  get snapshot() { return workspace.state; }
+}
 @Component({
   selector: 'myrpo-app',
   standalone: true,
@@ -200,16 +237,18 @@ class PlannedComponent {
         <header>
           <button type="button" (click)="collapsed = !collapsed" aria-label="Alternar menu" aria-controls="workspace-menu"
             [attr.aria-expanded]="!collapsed"><span class="an an-fill an-list" aria-hidden="true"></span></button>
-          <span class="workspace">Consultoria · Demonstração local</span>
+          <span class="workspace">Consultoria · {{ mode === 'api' ? 'API demonstrativa' : 'Demonstração local' }}</span>
           <button type="button" class="theme" (click)="toggleTheme()"><span [class]="light ? 'an an-fill an-moon' : 'an an-fill an-sun'" aria-hidden="true"></span>{{ light ? 'Tema escuro' : 'Tema claro' }}</button>
         </header>
-        <main><router-outlet /></main>
+        <main>@if (!available) { <p class="error" role="alert">API indisponível. Inicie o servidor e recarregue, ou selecione o modo LocalStorage em Configurações.</p> }<router-outlet /></main>
       </div>
     </div>
   `,
 })
 class AppComponent {
   readonly menu = menu;
+  readonly mode = workspace.mode;
+  readonly available = workspace.available;
   light = localStorage.getItem('myrpo.theme') === 'light';
   collapsed = matchMedia('(max-width: 700px)').matches;
 
@@ -224,7 +263,7 @@ class AppComponent {
   }
 }
 
-bootstrapApplication(AppComponent, {
+workspace.initialize().then(() => bootstrapApplication(AppComponent, {
   providers: [
     provideAnimations(),
     provideRouter([
@@ -232,8 +271,10 @@ bootstrapApplication(AppComponent, {
       { path: 'dashboard', component: DashboardComponent },
       ...(['clientes', 'chamados', 'projetos'] as const).map(collection =>
         ({ path: collection, component: RecordsComponent, data: { collection } })),
-      ...menu.slice(4).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
+      { path: 'estatisticas', component: StatisticsPageComponent },
+      { path: 'configuracoes', component: SettingsComponent },
+      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas').map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
       { path: '**', redirectTo: 'dashboard' },
     ], withHashLocation()),
   ],
-}).catch(error => console.error('Falha ao iniciar o MyRPO:', error));
+})).catch(error => console.error('Falha ao iniciar o MyRPO:', error));

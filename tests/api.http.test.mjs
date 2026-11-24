@@ -43,6 +43,8 @@ test('executa o ciclo de cliente, projeto e chamado pela API', async t => {
   await request('GET', 'chamados/inexistente', undefined, 404);
   await request('GET', 'inventario', undefined, 404);
 
-  await request('PATCH', 'clientes/' + cliente.id, { situacao: 'Inativo' });
+  const saved = await request('PATCH', 'clientes/' + cliente.id + '?include=workspace', { situacao: 'Inativo' });
+  assert.equal(saved.record.situacao, 'Inativo');
+  assert.deepEqual(await request('GET', 'workspace'), saved.workspace);
   await request('POST', 'chamados', { nome: 'Novo', clienteId: cliente.id }, 422);
 });

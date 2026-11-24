@@ -43,7 +43,8 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
-            "buildTarget": "myrpo:build"
+            "buildTarget": "myrpo:build",
+            "proxyConfig": "proxy.conf.json"
           }
         }
       }
