@@ -24,6 +24,11 @@
                 "glob": "MyRPO*.png",
                 "input": "Logo",
                 "output": "assets"
+              },
+              {
+                "glob": "favicon.ico",
+                "input": "Logo",
+                "output": "/"
               }
             ],
             "styles": [

@@ -12,11 +12,11 @@ import { LocalWorkspaceRepository } from './persistence';
 
 const workspace = new Workspace(new LocalWorkspaceRepository());
 const menu = [
-  ['dashboard', 'Dashboard', '▦'], ['clientes', 'Clientes', '◎'], ['chamados', 'Chamados', '▤'],
-  ['projetos', 'Projetos', '◇'], ['horas', 'Controle de horas', '◷'], ['estatisticas', 'Estatísticas', '▥'],
-  ['conhecimento', 'Base de conhecimento', '▧'], ['relatorios-internos', 'Relatórios internos', '▱'],
-  ['relatorios-clientes', 'Relatórios para clientes', '▱'], ['configuracoes', 'Configurações', '⚙'],
-  ['lixeira', 'Lixeira', '⊘'],
+  ['dashboard', 'Dashboard', 'an an-house'], ['clientes', 'Clientes', 'an an-users'], ['chamados', 'Chamados', 'an an-ticket'],
+  ['projetos', 'Projetos', 'an an-folder'], ['horas', 'Controle de horas', 'an an-clock'], ['estatisticas', 'Estatísticas', 'an an-chart-bar'],
+  ['conhecimento', 'Base de conhecimento', 'an an-book'], ['relatorios-internos', 'Relatórios internos', 'an an-file-text'],
+  ['relatorios-clientes', 'Relatórios para clientes', 'an an-file-text'], ['configuracoes', 'Configurações', 'an an-gear'],
+  ['lixeira', 'Lixeira', 'an an-trash'],
 ];
 const titles = Object.fromEntries(menu.map(([id, label]) => [id, label]));
 const tabs: Record<Collection, string[]> = {
@@ -59,30 +59,35 @@ const fields: Record<Collection, Field[]> = {
   standalone: true,
   imports: [DatePipe, RouterLink],
   template: `
-    <section class="heading"><div><h1>Dashboard</h1><p>Acompanhe seus atendimentos e projetos.</p></div>
-      <a class="primary" routerLink="/chamados" [queryParams]="{novo: 1}">+ Novo chamado</a>
+    <section class="heading dashboard-heading"><div><h1>Dashboard</h1><p>Acompanhe seus atendimentos e projetos.</p></div>
+      <a class="primary" routerLink="/chamados" [queryParams]="{novo: 1}"><span class="action-label">Novo chamado</span><span class="action-icon" aria-hidden="true"><span class="an an-plus"></span></span></a>
     </section>
     <div class="metrics">
       @for (metric of metrics; track metric.label) {
-        <article class="metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></article>
+        <article class="metric" [attr.data-tone]="metric.tone"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></article>
       }
     </div>
-    <section class="panel"><h2>Atividades recentes</h2>
+    <div class="dashboard-grid"><section class="panel activity-panel"><h2>Atividades recentes</h2>
       @for (event of recent; track $index) {
         <div class="event"><span>{{ event.message }}</span><time>{{ event.date | date:'dd/MM HH:mm' }}</time></div>
       } @empty { <p class="empty">As atividades aparecem aqui quando você salva um cadastro.</p> }
     </section>
-    <section class="panel"><h2>Cronômetro e consumo de horas</h2><p>Controle de horas planejado para um próximo bloco.</p></section>
+    <section class="panel dashboard-links"><h2>Operação</h2>
+      <a routerLink="/clientes">Clientes <span aria-hidden="true">→</span></a>
+      <a routerLink="/chamados">Chamados <span aria-hidden="true">→</span></a>
+      <a routerLink="/projetos">Projetos <span aria-hidden="true">→</span></a>
+      <a routerLink="/horas">Controle de horas <small>Planejado</small></a>
+    </section></div>
   `,
 })
 class DashboardComponent {
   private readonly active = workspace.state.chamados.filter(row => !row.arquivado);
   readonly recent = workspace.state.history.slice(0, 8);
   readonly metrics = [
-    ...statuses.map(label => ({ label, value: this.active.filter(row => row.status === label).length })),
-    { label: 'Urgentes e críticos em aberto', value: this.active.filter(row => row.status !== 'Finalizado' &&
+    ...statuses.map((label, index) => ({ label, tone: index, value: this.active.filter(row => row.status === label).length })),
+    { label: 'Urgentes e críticos em aberto', tone: 4, value: this.active.filter(row => row.status !== 'Finalizado' &&
       ['Urgente', 'Crítica'].includes(String(row.prioridade))).length },
-    { label: 'Projetos ativos', value: workspace.state.projetos.filter(row => row.situacao === 'Ativo').length },
+    { label: 'Projetos ativos', tone: 5, value: workspace.state.projetos.filter(row => row.situacao === 'Ativo').length },
   ];
 }
 
@@ -187,16 +192,16 @@ class PlannedComponent {
         <nav aria-label="Menu principal">
           @for (item of menu; track item[0]) {
             <a [routerLink]="item[0]" routerLinkActive="active" ariaCurrentWhenActive="page" [attr.aria-label]="item[1]"
-              [title]="item[1]" (click)="onNavigate()"><span aria-hidden="true">{{ item[2] }}</span><span>{{ item[1] }}</span></a>
+              [title]="item[1]" (click)="onNavigate()"><span class="nav-icon" [class]="item[2]" aria-hidden="true"></span><span>{{ item[1] }}</span></a>
           }
         </nav>
       </aside>
       <div class="body">
         <header>
           <button type="button" (click)="collapsed = !collapsed" aria-label="Alternar menu" aria-controls="workspace-menu"
-            [attr.aria-expanded]="!collapsed">☰</button>
+            [attr.aria-expanded]="!collapsed"><span class="an an-list" aria-hidden="true"></span></button>
           <span class="workspace">Consultoria · Demonstração local</span>
-          <button type="button" class="theme" (click)="toggleTheme()">{{ light ? 'Tema escuro' : 'Tema claro' }}</button>
+          <button type="button" class="theme" (click)="toggleTheme()"><span [class]="light ? 'an an-moon' : 'an an-sun'" aria-hidden="true"></span>{{ light ? 'Tema escuro' : 'Tema claro' }}</button>
         </header>
         <main><router-outlet /></main>
       </div>
