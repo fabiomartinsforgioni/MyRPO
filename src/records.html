@@ -1,6 +1,6 @@
 <section class="heading">
   <div><h1>{{ title }}</h1><p>Cadastros da demonstração</p></div>
-  <button type="button" class="primary" (click)="start()"><span class="action-label">{{ collection === 'clientes' ? 'Novo cliente' : collection === 'chamados' ? 'Novo chamado' : 'Novo projeto' }}</span><span class="action-icon" aria-hidden="true"><span class="an an-plus"></span></span></button>
+  <button type="button" class="primary" (click)="start()"><span class="action-label">{{ collection === 'clientes' ? 'Novo cliente' : collection === 'chamados' ? 'Novo chamado' : 'Novo projeto' }}</span><span class="action-icon" aria-hidden="true"><span class="an an-fill an-plus"></span></span></button>
 </section>
 @if (notice) { <p role="status">{{ notice }}</p> }
 @if (edit; as draft) {
@@ -50,7 +50,7 @@
         }
       </div>
       <div class="actions">
-        <button type="submit" class="primary" [disabled]="form.invalid"><span class="action-label">Salvar</span><span class="action-icon" aria-hidden="true"><span class="an an-check"></span></span></button>
+        <button type="submit" class="primary" [disabled]="form.invalid"><span class="action-label">Salvar</span><span class="action-icon" aria-hidden="true"><span class="an an-fill an-check"></span></span></button>
         <po-button p-label="Cancelar" (p-click)="edit = null"></po-button>
       </div>
     </form>
@@ -61,7 +61,7 @@
       <h2>{{ row.numero ? '#' + row.numero + ' · ' : '' }}{{ row.nome }}</h2>
       <div class="actions">
         <button type="button" (click)="selected = null; notice = ''">Fechar detalhes</button>
-        <button type="button" class="primary" (click)="start(row)"><span class="action-label">Editar</span><span class="action-icon" aria-hidden="true"><span class="an an-pencil"></span></span></button>
+        <button type="button" class="primary" (click)="start(row)"><span class="action-label">Editar</span><span class="action-icon" aria-hidden="true"><span class="an an-fill an-pencil"></span></span></button>
       </div>
     </div>
     <div class="tabs" aria-label="Seções do cadastro">

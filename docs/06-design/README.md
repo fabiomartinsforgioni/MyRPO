@@ -7,3 +7,5 @@ Nos dois temas, a paleta azul diferencia navegação, ações e seleção. Os t�
 O dashboard usa uma faixa azul com geometria ortogonal, indicadores com acentos por categoria e atalhos operacionais ao lado do histórico. Campos, filtros e ações seguem alturas e espaçamentos consistentes. Em telas estreitas, os painéis passam para uma coluna.
 
 Os ícones de navegação e ações usam Animalia, distribuído com PO UI. O favicon foi derivado do símbolo MyRPO e publicado em favicon.ico na raiz.
+
+O menu usa ícones Animalia preenchidos em blocos de cor por módulo. O azul fica concentrado no destaque do dashboard e na navegação ativa. As superfícies principais têm tons neutros nos dois temas.

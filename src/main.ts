@@ -12,11 +12,11 @@ import { LocalWorkspaceRepository } from './persistence';
 
 const workspace = new Workspace(new LocalWorkspaceRepository());
 const menu = [
-  ['dashboard', 'Dashboard', 'an an-house'], ['clientes', 'Clientes', 'an an-users'], ['chamados', 'Chamados', 'an an-ticket'],
-  ['projetos', 'Projetos', 'an an-folder'], ['horas', 'Controle de horas', 'an an-clock'], ['estatisticas', 'Estatísticas', 'an an-chart-bar'],
-  ['conhecimento', 'Base de conhecimento', 'an an-book'], ['relatorios-internos', 'Relatórios internos', 'an an-file-text'],
-  ['relatorios-clientes', 'Relatórios para clientes', 'an an-file-text'], ['configuracoes', 'Configurações', 'an an-gear'],
-  ['lixeira', 'Lixeira', 'an an-trash'],
+  ['dashboard', 'Dashboard', 'an an-fill an-house'], ['clientes', 'Clientes', 'an an-fill an-users'], ['chamados', 'Chamados', 'an an-fill an-ticket'],
+  ['projetos', 'Projetos', 'an an-fill an-folder'], ['horas', 'Controle de horas', 'an an-fill an-clock'], ['estatisticas', 'Estatísticas', 'an an-fill an-chart-bar'],
+  ['conhecimento', 'Base de conhecimento', 'an an-fill an-book'], ['relatorios-internos', 'Relatórios internos', 'an an-fill an-file-text'],
+  ['relatorios-clientes', 'Relatórios para clientes', 'an an-fill an-file-text'], ['configuracoes', 'Configurações', 'an an-fill an-gear'],
+  ['lixeira', 'Lixeira', 'an an-fill an-trash'],
 ];
 const titles = Object.fromEntries(menu.map(([id, label]) => [id, label]));
 const tabs: Record<Collection, string[]> = {
@@ -60,7 +60,7 @@ const fields: Record<Collection, Field[]> = {
   imports: [DatePipe, RouterLink],
   template: `
     <section class="heading dashboard-heading"><div><h1>Dashboard</h1><p>Acompanhe seus atendimentos e projetos.</p></div>
-      <a class="primary" routerLink="/chamados" [queryParams]="{novo: 1}"><span class="action-label">Novo chamado</span><span class="action-icon" aria-hidden="true"><span class="an an-plus"></span></span></a>
+      <a class="primary" routerLink="/chamados" [queryParams]="{novo: 1}"><span class="action-label">Novo chamado</span><span class="action-icon" aria-hidden="true"><span class="an an-fill an-plus"></span></span></a>
     </section>
     <div class="metrics">
       @for (metric of metrics; track metric.label) {
@@ -192,16 +192,16 @@ class PlannedComponent {
         <nav aria-label="Menu principal">
           @for (item of menu; track item[0]) {
             <a [routerLink]="item[0]" routerLinkActive="active" ariaCurrentWhenActive="page" [attr.aria-label]="item[1]"
-              [title]="item[1]" (click)="onNavigate()"><span class="nav-icon" [class]="item[2]" aria-hidden="true"></span><span>{{ item[1] }}</span></a>
+              [title]="item[1]" [attr.data-module]="item[0]" (click)="onNavigate()"><span class="nav-icon" [class]="item[2]" aria-hidden="true"></span><span>{{ item[1] }}</span></a>
           }
         </nav>
       </aside>
       <div class="body">
         <header>
           <button type="button" (click)="collapsed = !collapsed" aria-label="Alternar menu" aria-controls="workspace-menu"
-            [attr.aria-expanded]="!collapsed"><span class="an an-list" aria-hidden="true"></span></button>
+            [attr.aria-expanded]="!collapsed"><span class="an an-fill an-list" aria-hidden="true"></span></button>
           <span class="workspace">Consultoria · Demonstração local</span>
-          <button type="button" class="theme" (click)="toggleTheme()"><span [class]="light ? 'an an-moon' : 'an an-sun'" aria-hidden="true"></span>{{ light ? 'Tema escuro' : 'Tema claro' }}</button>
+          <button type="button" class="theme" (click)="toggleTheme()"><span [class]="light ? 'an an-fill an-moon' : 'an an-fill an-sun'" aria-hidden="true"></span>{{ light ? 'Tema escuro' : 'Tema claro' }}</button>
         </header>
         <main><router-outlet /></main>
       </div>
