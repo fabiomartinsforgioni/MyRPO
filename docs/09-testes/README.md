@@ -16,3 +16,5 @@ Quatro testes automatizados cobrem o domínio e o contrato HTTP, incluindo cron�
 Seis testes automatizados passaram, incluindo correções auditadas e a estrutura XLSX. No Edge, o lançamento retroativo de 60 minutos foi corrigido para 75 minutos e exportado no relatório. O XML da planilha gerada confirmou duração numérica de 1,25 h e texto literal no campo descrição.
 
 O ciclo final no Edge também verificou criação e edição de artigo, versionamento de referência e sua exibição no projeto vinculado, e recuperação de diagnóstico depois de recarregar a página.
+
+O aceite final no Edge confirmou a reabertura com histórico e o alerta com 1,25 h faturável de 1,50 h contratada. O teste de domínio confirmou que horas não faturáveis não compõem o saldo consumido.

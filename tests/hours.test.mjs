@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Workspace } from '../src/domain.ts';
+import { Workspace, timeTotals } from '../src/domain.ts';
 
 test('cronômetro único pausa, retoma e impede finalizar o chamado em uso', () => {
   let state;
@@ -23,6 +23,7 @@ test('cronômetro único pausa, retoma e impede finalizar o chamado em uso', () 
   assert.equal(entry.durationMs, 5000);
   assert.equal(entry.projectId, projeto.id);
   assert.equal(entry.billable, false);
+  assert.deepEqual(timeTotals([entry]), { billed: 0, unbilled: 5000 / 3600000, total: 5000 / 3600000 });
   assert.equal(entry.external, 'Diagnóstico concluído');
   const finalized = workspace.save('chamados', { ...chamado, status: 'Finalizado' });
   const trashed = workspace.save('chamados', { ...finalized, excluido: true });
