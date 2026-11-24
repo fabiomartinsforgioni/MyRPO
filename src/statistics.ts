@@ -1,6 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { priorities, statuses, timeTotals, types } from './domain';
+import { effectiveDuration, priorities, statuses, timeTotals, types } from './domain';
 import type { Snapshot, TimeEntry } from './domain';
 
 type Breakdown = { title: string; entries: { label: string; count: number; share: number }[] };
@@ -103,7 +103,7 @@ export class StatisticsComponent {
       const durations = new Map<string, number>();
       for (const entry of entries) {
         const label = labelFor(entry);
-        durations.set(label, (durations.get(label) ?? 0) + entry.durationMs);
+        durations.set(label, (durations.get(label) ?? 0) + effectiveDuration(entry));
       }
       return {
         title,

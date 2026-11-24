@@ -1,7 +1,8 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectorRef, Component, DestroyRef, Input, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { timerDuration, workTypes } from './domain';
+import { effectiveDuration, timerDuration, workTypes } from './domain';
+import type { TimeEntry } from './domain';
 import type { WorkspaceStore } from './workspace-store';
 
 @Component({
@@ -55,15 +56,62 @@ import type { WorkspaceStore } from './workspace-store';
       }
     </section>
     <section class="panel">
-      <h2>Horas registradas</h2>
+      <div class="detail-head">
+        <h2>Horas registradas</h2>
+        <button type="button" [disabled]="busy || !store.available" (click)="startManual()">Lançar horas retroativas</button>
+      </div>
+      @if (manual; as draft) {
+        <form #manualForm="ngForm" (ngSubmit)="manualForm.valid && saveManual()">
+          <h3>{{ draft.entryId ? 'Corrigir duração' : 'Lançamento retroativo' }}</h3>
+          @if (manualError) { <p class="error" role="alert">{{ manualError }}</p> }
+          <div class="form-grid">
+            @if (!draft.entryId) {
+              <label>Chamado <select name="manualTicket" required [(ngModel)]="draft.ticketId">
+                <option value="">Selecione</option>
+                @for (ticket of historicalTickets; track ticket.id) {
+                  <option [value]="ticket.id">#{{ ticket.numero }} · {{ ticket.nome }}</option>
+                }
+              </select></label>
+              <label>Tipo de trabalho <select name="manualActivity" [(ngModel)]="draft.activity">
+                @for (type of types; track type) { <option [value]="type">{{ type }}</option> }
+              </select></label>
+              <label>Início <input name="manualStart" type="datetime-local" required [(ngModel)]="draft.startedAt"></label>
+              <label class="check"><input name="manualBillable" type="checkbox" [(ngModel)]="draft.billable"> Faturável</label>
+              <label>Descrição interna <textarea name="manualInternal" required [(ngModel)]="draft.internal"></textarea></label>
+              <label>Descrição para o cliente <textarea name="manualExternal" required [(ngModel)]="draft.external"></textarea></label>
+            }
+            <label>Minutos <input name="manualMinutes" type="number" required min="1" max="1440" step="1" [(ngModel)]="draft.minutes"></label>
+            <label>Justificativa <textarea name="manualReason" required [(ngModel)]="draft.reason"></textarea></label>
+          </div>
+          <div class="actions">
+            <button type="button" [disabled]="busy" (click)="manual = null">Cancelar</button>
+            <button type="submit" class="primary" [disabled]="busy || manualForm.invalid">
+              <span class="action-label">Salvar lançamento</span><span class="action-icon an an-fill an-check" aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+      }
+      @if (notice) { <p role="status">{{ notice }}</p> }
       <div class="table-wrap"><table>
-        <thead><tr><th>Data</th><th>Chamado</th><th>Atividade</th><th>Horas</th><th>Faturamento</th></tr></thead>
+        <thead><tr><th>Data</th><th>Chamado</th><th>Atividade</th><th>Horas</th><th>Faturamento</th><th>Ações</th></tr></thead>
         <tbody>
           @for (entry of entries; track entry.id) {
             <tr><td>{{ entry.startedAt | date:'dd/MM/yyyy HH:mm' }}</td><td>{{ ticketName(entry.ticketId) }}</td>
-              <td>{{ entry.activity }}</td><td>{{ entry.durationMs / 3600000 | number:'1.2-4':'pt-BR' }}</td>
-              <td>{{ entry.billable ? 'Faturável' : 'Não faturável' }}</td></tr>
-          } @empty { <tr><td colspan="5" class="empty">Nenhuma atividade registrada.</td></tr> }
+              <td>{{ entry.activity }}</td><td>{{ duration(entry) / 3600000 | number:'1.2-4':'pt-BR' }}</td>
+              <td>{{ entry.billable ? 'Faturável' : 'Não faturável' }}</td>
+              <td><button type="button" [disabled]="busy" (click)="startManual(entry)">Corrigir duração</button>
+                @if (entry.corrections?.length) {
+                  <details><summary>Histórico de correções</summary>
+                    <p>Original: {{ entry.durationMs / 60000 | number:'1.0-2':'pt-BR' }} min</p>
+                    @for (item of entry.corrections; track $index) {
+                      <p>{{ item.correctedAt | date:'dd/MM/yyyy HH:mm' }} · {{ item.previousMs / 60000 | number:'1.0-2':'pt-BR' }}
+                        → {{ item.durationMs / 60000 | number:'1.0-2':'pt-BR' }} min · {{ item.reason }}</p>
+                    }
+                  </details>
+                }
+              </td>
+            </tr>
+          } @empty { <tr><td colspan="6" class="empty">Nenhuma atividade registrada.</td></tr> }
         </tbody>
       </table></div>
     </section>
@@ -73,6 +121,7 @@ export class HoursComponent {
   @Input({ required: true }) store!: WorkspaceStore;
   private readonly detector = inject(ChangeDetectorRef);
   readonly types = workTypes;
+  readonly duration = effectiveDuration;
   ticketId = '';
   activity = workTypes[0];
   internal = '';
@@ -81,6 +130,12 @@ export class HoursComponent {
   billable = true;
   busy = false;
   error = '';
+  notice = '';
+  manualError = '';
+  manual: {
+    entryId?: string; ticketId: string; activity: string; startedAt: string; minutes: number | null;
+    billable: boolean; internal: string; external: string; reason: string;
+  } | null = null;
   private now = Date.now();
 
   constructor() {
@@ -102,6 +157,38 @@ export class HoursComponent {
   }
 
   ticketName(id: string) { return this.store.state.chamados.find(ticket => ticket.id === id)?.nome ?? 'Chamado indisponível'; }
+
+  get historicalTickets() { return this.store.state.chamados.filter(ticket => !ticket.excluido); }
+
+  startManual(entry?: TimeEntry) {
+    this.notice = '';
+    this.manualError = '';
+    this.manual = {
+      entryId: entry?.id, ticketId: '', activity: workTypes[0], startedAt: '',
+      minutes: entry ? Math.max(1, Math.round(effectiveDuration(entry) / 60000)) : null,
+      billable: true, internal: '', external: '', reason: '',
+    };
+  }
+
+  async saveManual() {
+    if (this.busy || !this.manual) return;
+    this.busy = true;
+    this.manualError = '';
+    const { entryId, startedAt, ...draft } = this.manual;
+    try {
+      await this.store.applyHours({
+        ...draft, action: entryId ? 'correct' : 'retroactive', entryId,
+        startedAt: startedAt ? new Date(startedAt).getTime() : undefined,
+      });
+      this.manual = null;
+      this.notice = entryId ? 'Correção registrada.' : 'Lançamento retroativo registrado.';
+    } catch (error) {
+      this.manualError = error instanceof Error ? error.message : 'Não foi possível salvar o lançamento.';
+    } finally {
+      this.busy = false;
+      this.detector.markForCheck();
+    }
+  }
 
   async apply(action: 'start' | 'pause' | 'resume' | 'finish') {
     if (this.busy) return;

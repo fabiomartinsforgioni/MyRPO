@@ -1,8 +1,8 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { Snapshot } from './domain';
-import { timeTotals, workTypes } from './domain';
+import { effectiveDuration, timeTotals, workTypes } from './domain';
 
 @Component({
   selector: 'myrpo-reports',
@@ -13,9 +13,14 @@ import { timeTotals, workTypes } from './domain';
       <section class="heading">
         <div><h1>{{ external ? 'Relatórios para clientes' : 'Relatórios internos' }}</h1>
           <p>Filtre as atividades registradas no controle de horas.</p></div>
-        @if (external) { <button type="button" (click)="print()" [disabled]="!clientId || !entries.length">Imprimir relatório</button> }
+        @if (external) {
+          <button type="button" (click)="print()" [disabled]="!clientId || !entries.length">Imprimir relatório</button>
+        } @else {
+          <button type="button" (click)="exportExcel()" [disabled]="!entries.length || exporting">Exportar Excel</button>
+        }
       </section>
       <section class="panel report-filters">
+        @if (exportError) { <p role="alert" class="error">{{ exportError }}</p> }
         <div class="form-grid">
           <label>Cliente <select [(ngModel)]="clientId" (ngModelChange)="projectId = ''; ticketId = ''">
             <option value="">{{ external ? 'Selecione o cliente' : 'Todos os clientes' }}</option>
@@ -59,7 +64,7 @@ import { timeTotals, workTypes } from './domain';
                 <tr><td>{{ entry.startedAt | date:'dd/MM/yyyy' }}</td>
                   <td>{{ ticketName(entry.ticketId) }}</td><td>{{ entry.activity }}</td>
                   <td>{{ external ? entry.external : entry.internal }}</td>
-                  <td>{{ entry.durationMs / 3600000 | number:'1.2-4':'pt-BR' }}</td>
+                  <td>{{ duration(entry) / 3600000 | number:'1.2-4':'pt-BR' }}</td>
                   @if (!external) { <td>{{ entry.billable ? 'Faturável' : 'Não faturável' }}</td> }
                 </tr>
               } @empty { <tr><td [attr.colspan]="external ? 5 : 6" class="empty">Nenhuma atividade para os filtros selecionados.</td></tr> }
@@ -76,6 +81,8 @@ export class ReportsComponent {
   @Input() external = false;
 
   readonly types = workTypes;
+  private readonly detector = inject(ChangeDetectorRef);
+  readonly duration = effectiveDuration;
   clientId = '';
   projectId = '';
   ticketId = '';
@@ -84,6 +91,9 @@ export class ReportsComponent {
   through = '';
   consultant = '';
   outcome = '';
+
+  exporting = false;
+  exportError = '';
 
   get projects() { return this.snapshot.projetos.filter(row => !this.clientId || row.clienteId === this.clientId); }
   get tickets() { return this.snapshot.chamados.filter(row =>
@@ -110,5 +120,38 @@ export class ReportsComponent {
 
   clientName(id: string) { return this.snapshot.clientes.find(row => row.id === id)?.nome ?? '—'; }
   ticketName(id: string) { return this.snapshot.chamados.find(row => row.id === id)?.nome ?? '—'; }
+  async exportExcel() {
+    if (this.external || this.exporting || !this.entries.length) return;
+    this.exporting = true;
+    this.exportError = '';
+    const date = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    const rows = [
+      ['Início', 'Cliente', 'Projeto', 'Chamado', 'Atividade', 'Descrição interna', 'Horas', 'Faturamento'],
+      ...this.entries.map(entry => [
+        date.format(entry.startedAt), this.clientName(entry.clientId),
+        this.snapshot.projetos.find(project => project.id === entry.projectId)?.nome ?? '',
+        this.ticketName(entry.ticketId), entry.activity, entry.internal, effectiveDuration(entry) / 3600000,
+        entry.billable ? 'Faturável' : 'Não faturável',
+      ]),
+    ];
+    try {
+      const { createWorkbook } = await import('./xlsx');
+      const blob = new Blob([createWorkbook(rows)], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'myrpo-relatorio-de-horas.xlsx';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      this.exportError = 'Não foi possível gerar o arquivo Excel.';
+    } finally {
+      this.exporting = false;
+      this.detector.markForCheck();
+    }
+  }
+
   print() { window.print(); }
 }

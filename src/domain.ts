@@ -26,7 +26,10 @@ export type Timer = {
   runningSince: number | null;
   accumulatedMs: number;
 };
+export type HourCorrection = { previousMs: number; durationMs: number; reason: string; correctedAt: number };
 export type TimeEntry = {
+  source?: 'retroactive';
+  corrections?: HourCorrection[];
   id: string;
   ticketId: string;
   clientId: string;
@@ -47,12 +50,25 @@ export type Snapshot = Record<Collection, Row[]> & {
   hours?: TimeEntry[];
 };
 
+export function effectiveDuration(entry: TimeEntry): number {
+  return entry.corrections?.at(-1)?.durationMs ?? entry.durationMs;
+}
+
+const hourNote = (value: unknown) => typeof value === 'string' ? value.trim().slice(0, 8000) : '';
+
+function requestedDuration(minutes: unknown): number {
+  if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+    throw new Error('Informe entre 1 e 1440 minutos inteiros.');
+  }
+  return minutes * 60000;
+}
+
 export function timeTotals(entries: readonly TimeEntry[]) {
   let billedMs = 0;
   let unbilledMs = 0;
   for (const entry of entries) {
-    if (entry.billable) billedMs += entry.durationMs;
-    else unbilledMs += entry.durationMs;
+    if (entry.billable) billedMs += effectiveDuration(entry);
+    else unbilledMs += effectiveDuration(entry);
   }
   return { billed: billedMs / 3600000, unbilled: unbilledMs / 3600000, total: (billedMs + unbilledMs) / 3600000 };
 }
@@ -91,6 +107,9 @@ export class Workspace {
     }
     const { action, ticketId, activity, billable, internal, external, reason } = command as Record<string, unknown>;
     const state = this.repository.load() ?? this.state;
+    if (action === 'retroactive' || action === 'correct') {
+      return this.saveManualHours(state, command as Record<string, unknown>, now);
+    }
     const current = state.timer;
     let timer = current ?? null;
     let hours = state.hours ?? [];
@@ -119,10 +138,10 @@ export class Workspace {
           break;
         case 'finish': {
           if (typeof billable !== 'boolean') throw new Error('Informe se a atividade é faturável.');
-          const notes = (value: unknown) => typeof value === 'string' ? value.trim().slice(0, 8000) : '';
-          const internalText = notes(internal);
-          const externalText = notes(external);
-          const reasonText = notes(reason);
+
+          const internalText = hourNote(internal);
+          const externalText = hourNote(external);
+          const reasonText = hourNote(reason);
           if (!internalText || !externalText) throw new Error('Preencha as descrições interna e para o cliente.');
           if (!billable && !reasonText) throw new Error('Informe a justificativa da atividade não faturável.');
           const durationMs = timerDuration(current, now);
@@ -141,6 +160,45 @@ export class Workspace {
     }
 
     const next = { ...state, timer, hours };
+    this.repository.save(next);
+    this.state = next;
+    return next;
+  }
+
+  private saveManualHours(state: Snapshot, input: Record<string, unknown>, now: number): Snapshot {
+    const reason = hourNote(input.reason);
+    if (!reason) throw new Error('Informe a justificativa.');
+    const durationMs = requestedDuration(input.minutes);
+    let hours = state.hours ?? [];
+
+    if (input.action === 'correct') {
+      const entry = hours.find(item => item.id === input.entryId);
+      if (!entry) throw new Error('Lançamento não encontrado.');
+      const previousMs = effectiveDuration(entry);
+      if (durationMs === previousMs) throw new Error('Informe uma duração diferente da atual.');
+      if (entry.startedAt + durationMs > now) throw new Error('O período corrigido não pode terminar no futuro.');
+      const correction = { previousMs, durationMs, reason, correctedAt: now };
+      hours = hours.map(item => item.id === entry.id
+        ? { ...entry, corrections: [...(entry.corrections ?? []), correction] } : item);
+    } else {
+      const ticket = state.chamados.find(row => row.id === input.ticketId && !row.excluido);
+      if (!ticket) throw new Error('Selecione um chamado disponível.');
+      const { startedAt, activity, billable } = input;
+      const internal = hourNote(input.internal);
+      const external = hourNote(input.external);
+      if (typeof activity !== 'string' || !workTypes.includes(activity)) throw new Error('Selecione o tipo de trabalho.');
+      if (typeof billable !== 'boolean' || !internal || !external) throw new Error('Informe o faturamento e preencha as duas descrições.');
+      if (typeof startedAt !== 'number' || !Number.isSafeInteger(startedAt) || startedAt < 0 || startedAt + durationMs > now) {
+        throw new Error('Informe um período válido, com término fora do futuro.');
+      }
+      hours = [{
+        id: crypto.randomUUID(), ticketId: ticket.id, clientId: String(ticket.clienteId),
+        projectId: String(ticket.projetoId ?? ''), source: 'retroactive', startedAt,
+        finishedAt: startedAt + durationMs, durationMs, activity, billable, internal, external, reason,
+      }, ...hours];
+    }
+
+    const next = { ...state, hours };
     this.repository.save(next);
     this.state = next;
     return next;
