@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "cli": {
+    "analytics": false
+  },
+  "projects": {
+    "myrpo": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "src/index.html",
+            "tsConfig": "tsconfig.json",
+            "outputPath": "dist/myrpo",
+            "polyfills": [
+              "zone.js"
+            ],
+            "assets": [
+              {
+                "glob": "MyRPO.png",
+                "input": "Logo",
+                "output": "assets"
+              }
+            ],
+            "styles": [
+              "@po-ui/style/css/po-theme-default.min.css",
+              "src/styles.css"
+            ],
+            "optimization": {
+              "fonts": false
+            }
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "buildTarget": "myrpo:build"
+          }
+        }
+      }
+    }
+  }
+}

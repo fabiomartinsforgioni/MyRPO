@@ -1,0 +1,140 @@
+<section class="heading">
+  <div><h1>{{ title }}</h1><p>Cadastros da demonstração</p></div>
+  <button type="button" class="primary" (click)="start()">+ {{ collection === 'clientes' ? 'Novo cliente' : collection === 'chamados' ? 'Novo chamado' : 'Novo projeto' }}</button>
+</section>
+@if (notice) { <p role="status">{{ notice }}</p> }
+@if (edit; as draft) {
+  <section class="panel">
+    <h2>{{ draft.id ? 'Editar cadastro' : 'Novo cadastro' }}</h2>
+    @if (error) { <p class="error" role="alert">{{ error }}</p> }
+    <form #form="ngForm" (ngSubmit)="form.valid && save()">
+      <div class="form-grid">
+        @for (field of fields; track field.key) {
+          <label [class.wide]="field.type === 'textarea'" [class.check]="field.type === 'checkbox'">
+            @if (field.type !== 'checkbox') { <span>{{ field.label }}{{ field.required ? ' *' : '' }}</span> }
+            @switch (field.key) {
+              @case ('clienteId') {
+                <select name="clienteId" required [(ngModel)]="draft.clienteId" (ngModelChange)="draft.projetoId = ''">
+                  <option value="">Selecione</option>
+                  @for (client of clients; track client.id) {
+                    @if (client.situacao === 'Ativo' || selected?.clienteId === client.id) {
+                      <option [value]="client.id">{{ client.nome }}</option>
+                    }
+                  }
+                </select>
+              }
+              @case ('projetoId') {
+                <select name="projetoId" [(ngModel)]="draft.projetoId">
+                  <option value="">Chamado avulso</option>
+                  @for (project of projects; track project.id) { <option [value]="project.id">{{ project.nome }}</option> }
+                </select>
+              }
+              @default {
+                @if (field.options) {
+                  <select [name]="field.key" [attr.name]="field.key" [(ngModel)]="draft[field.key]">
+                    @for (option of options(field); track option) { <option [value]="option">{{ option }}</option> }
+                  </select>
+                } @else if (field.type === 'textarea') {
+                  <textarea [name]="field.key" [attr.name]="field.key" [(ngModel)]="draft[field.key]" rows="3"></textarea>
+                } @else if (field.type === 'checkbox') {
+                  <input type="checkbox" [name]="field.key" [attr.name]="field.key" [(ngModel)]="draft[field.key]">{{ field.label }}
+                } @else if (field.type === 'number') {
+                  <input type="number" min="0" step="0.25" [name]="field.key" [attr.name]="field.key" [(ngModel)]="draft[field.key]">
+                } @else {
+                  <input [type]="field.type ?? 'text'" [name]="field.key" [attr.name]="field.key" [required]="field.required ?? false"
+                    [(ngModel)]="draft[field.key]" [email]="field.type === 'email'">
+                }
+              }
+            }
+          </label>
+        }
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary" [disabled]="form.invalid">Salvar</button>
+        <po-button p-label="Cancelar" (p-click)="edit = null"></po-button>
+      </div>
+    </form>
+  </section>
+} @else if (selected; as row) {
+  <section class="panel">
+    <div class="detail-head">
+      <h2>{{ row.numero ? '#' + row.numero + ' · ' : '' }}{{ row.nome }}</h2>
+      <div class="actions">
+        <button type="button" (click)="selected = null; notice = ''">Fechar detalhes</button>
+        <button type="button" class="primary" (click)="start(row)">Editar</button>
+      </div>
+    </div>
+    <div class="tabs" aria-label="Seções do cadastro">
+      @for (item of tabs; track item) {
+        <button type="button" [attr.aria-pressed]="tab === item" (click)="tab = item">{{ item }}</button>
+      }
+    </div>
+    @switch (tab) {
+      @case ('Visão geral') {
+        <dl class="form-grid">
+          @for (field of fields; track field.key) {
+            @if (field.key !== 'nome') {
+              <div><dt>{{ field.label }}</dt><dd>{{ field.key === 'clienteId' ? clientName(row.clienteId) :
+                field.key === 'projetoId' ? (row.projetoId ? (projectName(row.projetoId)) : 'Avulso') :
+                field.type === 'checkbox' ? (row[field.key] ? 'Sim' : 'Não') : row[field.key] ?? '—' }}</dd></div>
+            }
+          }
+        </dl>
+      }
+      @case ('Histórico') {
+        @for (event of history; track $index) {
+          <div class="event"><span>{{ event.message }}</span><time>{{ event.date | date:'dd/MM HH:mm' }}</time></div>
+        }
+      }
+      @case ('Chamados') {
+        @for (item of linked; track item.id) { <p>#{{ item.numero }} · {{ item.nome }} · {{ item.status }}</p> }
+        @empty { <p>Nenhum chamado vinculado.</p> }
+      }
+      @default { <p>{{ tab }} está previsto no roadmap. O armazenamento de arquivos não está disponível nesta Alpha.</p> }
+    }
+  </section>
+}
+<section class="panel">
+  <div class="filters">
+    <label>Pesquisar <input type="search" [(ngModel)]="query" placeholder="Nome, cliente ou número"></label>
+    @if (collection !== 'clientes') {
+      <label>Cliente <select [(ngModel)]="clientFilter"><option value="">Todos</option>
+        @for (client of clients; track client.id) { <option [value]="client.id">{{ client.nome }}</option> }
+      </select></label>
+    }
+    <label>{{ collection === 'chamados' ? 'Status' : 'Situação' }}
+      <select [(ngModel)]="status"><option value="">Todos</option>
+        @for (item of (collection === 'chamados' ? statuses : collection === 'projetos' ? ['Ativo', 'Encerrado'] : ['Ativo', 'Inativo']); track item) {
+          <option [value]="item">{{ item }}</option>
+        }
+      </select>
+    </label>
+    @if (collection === 'chamados') {
+      <label>Prioridade <select [(ngModel)]="priority"><option value="">Todas</option>
+        @for (item of priorities; track item) { <option [value]="item">{{ item }}</option> }
+      </select></label>
+      <label class="check"><input type="checkbox" [(ngModel)]="showArchived">Ver arquivados</label>
+    }
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>{{ collection === 'chamados' ? 'Chamado' : 'Nome' }}</th>
+        @if (collection !== 'clientes') { <th>Cliente</th> }
+        @if (collection === 'chamados') { <th>Prioridade</th><th>Pendência</th> }
+        <th>{{ collection === 'chamados' ? 'Status' : 'Situação' }}</th><th>Ações</th>
+      </tr></thead>
+      <tbody>
+        @for (row of rows; track row.id) {
+          <tr><th scope="row">{{ row.numero ? '#' + row.numero + ' · ' : '' }}{{ row.nome }}</th>
+            @if (collection !== 'clientes') { <td>{{ clientName(row.clienteId) }}</td> }
+            @if (collection === 'chamados') { <td>{{ row.prioridade }}</td><td>{{ row.pendencia ? 'Sim' : '—' }}</td> }
+            <td><span class="badge">{{ row.status ?? row.situacao }}</span></td>
+            <td><button type="button" (click)="open(row)" [attr.aria-label]="'Abrir ' + row.nome">Abrir</button></td>
+          </tr>
+        } @empty {
+          <tr><td class="empty" [attr.colspan]="collection === 'chamados' ? 6 : collection === 'projetos' ? 4 : 3">Nenhum cadastro encontrado.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
