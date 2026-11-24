@@ -43,11 +43,38 @@ export type TimeEntry = {
   external: string;
   reason: string;
 };
+export type KnowledgeArticle = {
+  id: string;
+  title: string;
+  module: string;
+  context: string;
+  solution: string;
+  updatedAt: number;
+};
+export const artifactKinds: Record<string, string[]> = {
+  Fontes: ['Fonte original', 'Fonte alterado', 'SQL'],
+  Anexos: ['Print', 'Log', 'JSON', 'XML', 'Documento'],
+  Documentação: ['Documento'],
+};
+export type TechnicalArtifact = {
+  id: string;
+  owner: 'chamados' | 'projetos';
+  ownerId: string;
+  name: string;
+  kind: string;
+  reference: string;
+  notes: string;
+  previousId?: string;
+  version: number;
+  createdAt: number;
+};
 export type Snapshot = Record<Collection, Row[]> & {
   sequence: number;
   history: Activity[];
   timer?: Timer | null;
   hours?: TimeEntry[];
+  knowledge?: KnowledgeArticle[];
+  artifacts?: TechnicalArtifact[];
 };
 
 export function effectiveDuration(entry: TimeEntry): number {
@@ -99,6 +126,59 @@ export class Workspace {
 
   trail(id: string) {
     return this.state.history.filter(event => event.id === id);
+  }
+
+  addArtifact(input: unknown, now = Date.now()): Snapshot {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Informe os dados da referência.');
+    const draft = input as Record<string, unknown>;
+    const { owner, ownerId, previousId, kind } = draft;
+    const state = this.repository.load() ?? this.state;
+    if ((owner !== 'chamados' && owner !== 'projetos') || typeof ownerId !== 'string' ||
+        !state[owner].some(row => row.id === ownerId && !row.excluido)) {
+      throw new Error('Cadastro de origem não encontrado.');
+    }
+    const name = hourNote(draft.name).slice(0, 255);
+    const reference = hourNote(draft.reference);
+    const notes = hourNote(draft.notes);
+    if (!name || !reference) throw new Error('Informe nome e referência da origem.');
+    if (typeof kind !== 'string' || !Object.values(artifactKinds).some(section => section.includes(kind))) {
+      throw new Error('Selecione um tipo de arquivo.');
+    }
+    const artifacts = state.artifacts ?? [];
+    const previous = previousId ? artifacts.find(item => item.id === previousId) : undefined;
+    if (previousId && (!previous || previous.owner !== owner || previous.ownerId !== ownerId ||
+        previous.name !== name || previous.kind !== kind || artifacts.some(item => item.previousId === previousId))) {
+      throw new Error('A nova versão deve partir da última versão do mesmo arquivo.');
+    }
+    const item: TechnicalArtifact = {
+      id: crypto.randomUUID(), owner, ownerId, name, kind, reference, notes, previousId: previous?.id,
+      version: (previous?.version ?? 0) + 1, createdAt: now,
+    };
+    const next = { ...state, artifacts: [item, ...artifacts] };
+    this.repository.save(next);
+    this.state = next;
+    return next;
+  }
+
+  saveKnowledge(input: unknown, now = Date.now()) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Informe o artigo.');
+    const draft = input as Record<string, unknown>;
+    const text = (key: string, limit: number) => typeof draft[key] === 'string' ? draft[key].trim().slice(0, limit) : '';
+    const title = text('title', 180);
+    const module = text('module', 120);
+    const context = text('context', 8000);
+    const solution = text('solution', 8000);
+    if (!title || !context || !solution) throw new Error('Preencha título, contexto e solução.');
+
+    const state = this.repository.load() ?? this.state;
+    const articles = state.knowledge ?? [];
+    const existing = draft.id ? articles.find(article => article.id === draft.id) : undefined;
+    if (draft.id && !existing) throw new Error('Artigo não encontrado.');
+    const article = { id: existing?.id ?? crypto.randomUUID(), title, module, context, solution, updatedAt: now };
+    const next = { ...state, knowledge: [article, ...articles.filter(item => item.id !== article.id)] };
+    this.repository.save(next);
+    this.state = next;
+    return { article, workspace: next };
   }
 
   applyHours(command: unknown, now = Date.now()): Snapshot {

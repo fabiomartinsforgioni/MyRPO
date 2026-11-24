@@ -13,6 +13,8 @@ import type { Collection, Row } from './domain';
 import { WorkspaceStore } from './workspace-store';
 import { StatisticsComponent } from './statistics';
 import { HoursComponent } from './hours';
+import { KnowledgeComponent } from './knowledge';
+import { TechnicalCatalogComponent } from './technical-catalog';
 import { ReportsComponent } from './reports';
 
 registerLocaleData(localePt);
@@ -30,6 +32,15 @@ const tabs: Record<Collection, string[]> = {
   chamados: ['Visão geral', 'Histórico', 'Diagnóstico', 'Solução', 'Fontes', 'Anexos', 'Testes', 'Validação', 'Horas'],
   projetos: ['Visão geral', 'Chamados', 'Fontes', 'Documentação', 'Anexos', 'Anotações', 'Horas', 'Testes e validações', 'Histórico'],
 };
+const detailNotes: Record<string, string> = {
+  Diagnóstico: 'diagnostico',
+  Solução: 'solucao',
+  Testes: 'testes',
+  Validação: 'validacao',
+  Anotações: 'anotacoes',
+  'Testes e validações': 'testesValidacoes',
+};
+
 type Field = { key: string; label: string; type?: string; options?: string[]; required?: boolean };
 const fields: Record<Collection, Field[]> = {
   clientes: [
@@ -118,10 +129,11 @@ class DashboardComponent {
 
 @Component({
   standalone: true,
-  imports: [FormsModule, DatePipe, DecimalPipe, PoButtonModule],
+  imports: [FormsModule, DatePipe, DecimalPipe, PoButtonModule, TechnicalCatalogComponent],
   templateUrl: './records.html',
 })
 class RecordsComponent {
+  readonly store = workspace;
   private readonly route = inject(ActivatedRoute);
   private readonly changeDetector = inject(ChangeDetectorRef);
   readonly collection = this.route.snapshot.data['collection'] as Collection;
@@ -139,6 +151,7 @@ class RecordsComponent {
   edit: Partial<Row> | null = null;
   selected: Row | null = null;
   tab = 'Visão geral';
+  noteDraft = '';
   error = '';
   notice = '';
   saving = false;
@@ -192,6 +205,30 @@ class RecordsComponent {
     this.edit = null;
     this.selected = row;
     this.tab = 'Visão geral';
+  }
+
+  get noteField() { return detailNotes[this.tab]; }
+
+  selectTab(tab: string) {
+    this.tab = tab;
+    this.notice = '';
+    this.noteDraft = String(this.selected?.[detailNotes[tab]] ?? '');
+  }
+
+  async saveNote() {
+    if (!this.selected || !this.noteField || this.trash || this.saving) return;
+    this.saving = true;
+    try {
+      this.selected = await workspace.save(this.collection, {
+        id: this.selected.id, nome: this.selected.nome, [this.noteField]: this.noteDraft,
+      });
+      this.notice = 'Anotação salva.';
+    } catch (error) {
+      this.notice = error instanceof Error ? error.message : 'Não foi possível salvar a anotação.';
+    } finally {
+      this.saving = false;
+      this.changeDetector.markForCheck();
+    }
   }
 
   async changeTrash() {
@@ -283,6 +320,14 @@ class ReportsPageComponent {
   get snapshot() { return workspace.state; }
 }
 @Component({
+  standalone: true,
+  imports: [KnowledgeComponent],
+  template: '<myrpo-knowledge [store]="store" />',
+})
+class KnowledgePageComponent {
+  readonly store = workspace;
+}
+@Component({
   selector: 'myrpo-app',
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
@@ -335,13 +380,14 @@ workspace.initialize().then(() => bootstrapApplication(AppComponent, {
       { path: 'dashboard', component: DashboardComponent },
       ...(['clientes', 'chamados', 'projetos'] as const).map(collection =>
         ({ path: collection, component: RecordsComponent, data: { collection } })),
+      { path: 'conhecimento', component: KnowledgePageComponent },
       { path: 'horas', component: HoursPageComponent },
       { path: 'relatorios-internos', component: ReportsPageComponent },
       { path: 'relatorios-clientes', component: ReportsPageComponent, data: { external: true } },
       { path: 'estatisticas', component: StatisticsPageComponent },
       { path: 'lixeira', component: RecordsComponent, data: { collection: 'chamados', trash: true } },
       { path: 'configuracoes', component: SettingsComponent },
-      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas' && path !== 'horas' && path !== 'lixeira' && !path.startsWith('relatorios-')).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
+      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas' && path !== 'horas' && path !== 'conhecimento' && path !== 'lixeira' && !path.startsWith('relatorios-')).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
       { path: '**', redirectTo: 'dashboard' },
     ], withHashLocation()),
   ],

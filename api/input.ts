@@ -4,9 +4,9 @@ import type { Collection, Row } from '../src/domain.js';
 
 const textFields: Record<Collection, ReadonlySet<string>> = {
   clientes: new Set(['nome', 'razaoSocial', 'cnpj', 'contato', 'email', 'telefone', 'observacoes']),
-  projetos: new Set(['nome', 'clienteId', 'descricao']),
+  projetos: new Set(['nome', 'clienteId', 'descricao', 'anotacoes', 'testesValidacoes']),
   chamados: new Set(['nome', 'numeroExterno', 'clienteId', 'projetoId', 'modulo', 'rotina',
-    'release', 'ambiente', 'solicitante', 'previsao', 'descricao', 'erro']),
+    'release', 'ambiente', 'solicitante', 'previsao', 'descricao', 'erro', 'diagnostico', 'solucao', 'testes', 'validacao']),
 };
 const allowedValues: Record<Collection, Record<string, readonly string[]>> = {
   clientes: { situacao: ['Ativo', 'Inativo'] },

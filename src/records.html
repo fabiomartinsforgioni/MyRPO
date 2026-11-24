@@ -69,7 +69,7 @@
     </div>
     <div class="tabs" aria-label="Seções do cadastro">
       @for (item of tabs; track item) {
-        <button type="button" [attr.aria-pressed]="tab === item" (click)="tab = item">{{ item }}</button>
+        <button type="button" [attr.aria-pressed]="tab === item" [disabled]="saving" (click)="selectTab(item)">{{ item }}</button>
       }
     </div>
     @switch (tab) {
@@ -109,7 +109,31 @@
           <div class="event"><span>{{ entry.activity }} · {{ entry.internal }}</span><time>{{ entry.startedAt | date:'dd/MM/yyyy HH:mm' }}</time></div>
         } @empty { <p>Nenhuma atividade registrada neste cadastro.</p> }
       }
-      @default { <p>{{ tab }} está previsto no roadmap. O armazenamento de arquivos não está disponível nesta Alpha.</p> }
+      @case ('Fontes') {
+        @if (collection !== 'clientes' && !trash) {
+          <myrpo-technical-catalog [store]="store" [owner]="collection" [ownerId]="row.id" tab="Fontes" />
+        }
+      }
+      @case ('Anexos') {
+        @if (collection !== 'clientes' && !trash) {
+          <myrpo-technical-catalog [store]="store" [owner]="collection" [ownerId]="row.id" tab="Anexos" />
+        }
+      }
+      @case ('Documentação') {
+        <myrpo-technical-catalog [store]="store" owner="projetos" [ownerId]="row.id" tab="Documentação" />
+      }
+      @default {
+        @if (noteField) {
+          @if (trash) {
+            <p>{{ noteDraft || 'Nenhuma anotação cadastrada.' }}</p>
+          } @else {
+            <form (ngSubmit)="saveNote()">
+              <label>{{ tab }} <textarea name="detailNote" rows="5" maxlength="8000" [(ngModel)]="noteDraft"></textarea></label>
+              <div class="actions"><button type="submit" [disabled]="saving">Salvar anotação</button></div>
+            </form>
+          }
+        }
+      }
     }
   </section>
 }

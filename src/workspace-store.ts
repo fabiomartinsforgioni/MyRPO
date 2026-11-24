@@ -1,5 +1,5 @@
 import { Workspace } from './domain';
-import type { Collection, Row, Snapshot } from './domain';
+import type { Collection, KnowledgeArticle, Row, Snapshot } from './domain';
 import { LocalWorkspaceRepository } from './persistence';
 
 type SaveResponse = { record: Row; workspace: Snapshot };
@@ -39,6 +39,30 @@ export class WorkspaceStore {
     });
     this.remote = result.workspace;
     return result.record;
+  }
+
+  async addArtifact(input: unknown): Promise<void> {
+    if (this.mode === 'local') {
+      this.local.addArtifact(input);
+      return;
+    }
+    this.remote = await this.request<Snapshot>('/workspace/artifacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  async saveKnowledge(input: Omit<KnowledgeArticle, 'updatedAt'>): Promise<KnowledgeArticle> {
+    if (this.mode === 'local') return this.local.saveKnowledge(input).article;
+    if (!this.available) throw new Error('API indisponível.');
+    const result = await this.request<{ article: KnowledgeArticle; workspace: Snapshot }>('/workspace/knowledge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    this.remote = result.workspace;
+    return result.article;
   }
 
   async applyHours(command: unknown): Promise<void> {

@@ -11,6 +11,8 @@ O comando `npm test` também compila a API e executa o [teste de integração HT
 
 Integração Angular–NestJS validada no Edge com proxy: alternância entre origens, cadastro e edição via API, histórico após gravação, recarga, distribuição nas estatísticas e retorno aos dados previamente gravados no navegador.
 
-Quatro testes automatizados cobrem o domínio e o contrato HTTP, incluindo cronômetro único, bloqueio de finalização, vínculo, histórico, pausa, retomada e justificativa de horas não faturáveis. No Edge foram verificados o ciclo do cronômetro, gráficos de horas, relatório interno, PDF externo sem descrição interna e restauração de chamado pela lixeira. O caderno geral em Excel será consolidado após a implementação dos itens restantes.
+Quatro testes automatizados cobrem o domínio e o contrato HTTP, incluindo cronômetro único, bloqueio de finalização, vínculo, histórico, pausa, retomada e justificativa de horas não faturáveis. No Edge foram verificados o ciclo do cronômetro, gráficos de horas, relatório interno, PDF externo sem descrição interna e restauração de chamado pela lixeira. O caderno geral em Excel é um artefato local separado, com os casos e resultados técnicos da Alpha.
 
 Seis testes automatizados passaram, incluindo correções auditadas e a estrutura XLSX. No Edge, o lançamento retroativo de 60 minutos foi corrigido para 75 minutos e exportado no relatório. O XML da planilha gerada confirmou duração numérica de 1,25 h e texto literal no campo descrição.
+
+O ciclo final no Edge também verificou criação e edição de artigo, versionamento de referência e sua exibição no projeto vinculado, e recuperação de diagnóstico depois de recarregar a página.

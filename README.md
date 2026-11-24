@@ -38,11 +38,12 @@ npm run build
 ## Escopo
 
 - Implementado no primeiro bloco: dashboard operacional, clientes, chamados, projetos, histórico, abas e persistência local.
-- Planejado: base de conhecimento, configurações adicionais e armazenamento de arquivos. As rotas desses módulos estão disponíveis como prévia de navegação.
+- Planejado: armazenamento binário de fontes e anexos, autenticação, separação por workspace e persistência definitiva.
 - Implementado no segundo bloco: [API REST NestJS em memória](docs/04-arquitetura/api-rest.md), executável em separado com `npm run start:api`.
 - Em Configurações, alterne entre LocalStorage e API demonstrativa. Para usar a API, inicie também `npm run start:api` em outro terminal. Cada modo tem seus próprios cadastros.
 - Estatísticas de chamados e horas nos dois modos. A lixeira de chamados permite restaurar os registros mantendo seu status operacional.
 - [Controle de horas e relatórios demonstrativos](docs/03-regras-de-negocio/controle-de-horas.md). O relatório para clientes é imprimível.
+- [Base de conhecimento e catálogo técnico](docs/03-regras-de-negocio/catalogo-tecnico.md), com anotação por aba e referências versionadas de chamados e projetos.
 - Evolução da persistência: PostgreSQL com isolamento por workspace.
 
 [Documentação do projeto](docs/README.md) · [Aviso de propriedade intelectual](docs/11-propriedade-intelectual/README.md)

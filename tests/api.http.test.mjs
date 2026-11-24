@@ -57,6 +57,29 @@ test('executa o ciclo de cliente, projeto e chamado pela API', async t => {
   assert.equal(hours.hours[0].projectId, projeto.id);
   assert.equal(hours.hours[0].billable, true);
 
+  const article = await request('POST', 'workspace/knowledge', {
+    title: 'Conferência de rotina', module: 'Exemplo', context: 'Cenário fictício', solution: 'Passos iniciais',
+  }, 201);
+  const revised = await request('POST', 'workspace/knowledge', {
+    ...article.article, solution: 'Passos atualizados',
+  }, 201);
+  assert.equal(revised.article.id, article.article.id);
+  assert.equal(revised.workspace.knowledge.length, 1);
+  await request('POST', 'workspace/knowledge', { title: 'Incompleto' }, 422);
+  const artifactData = {
+    owner: 'chamados', ownerId: chamado.id, name: 'rotina-exemplo.prw',
+    kind: 'Fonte original', reference: 'Repositório fictício / primeira revisão',
+  };
+  const registered = await request('POST', 'workspace/artifacts', artifactData, 201);
+  const first = registered.artifacts[0];
+  const versionInput = { ...artifactData, previousId: first.id, reference: 'Revisão fictícia' };
+  const versioned = await request('POST', 'workspace/artifacts', versionInput, 201);
+  assert.equal(versioned.artifacts[0].version, 2);
+  assert.equal(versioned.artifacts[0].previousId, first.id);
+  await request('POST', 'workspace/artifacts', versionInput, 422);
+  const sameName = await request('POST', 'workspace/artifacts', { ...artifactData, reference: 'Outro arquivo' }, 201);
+  assert.equal(sameName.artifacts[0].version, 1);
+  assert.notEqual(sameName.artifacts[0].id, first.id);
   const saved = await request('PATCH', 'clientes/' + cliente.id + '?include=workspace', { situacao: 'Inativo' });
   assert.equal(saved.record.situacao, 'Inativo');
   assert.deepEqual(await request('GET', 'workspace'), saved.workspace);

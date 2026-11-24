@@ -34,6 +34,26 @@ class RecordsController {
   @Get('workspace')
   snapshot() { return this.workspace.state; }
 
+  @Post('workspace/artifacts')
+  artifacts(@Body() input: unknown) {
+    try {
+      return this.workspace.addArtifact(input);
+    } catch (error) {
+      if (error instanceof Error) throw new UnprocessableEntityException(error.message);
+      throw error;
+    }
+  }
+
+  @Post('workspace/knowledge')
+  knowledge(@Body() input: unknown) {
+    try {
+      return this.workspace.saveKnowledge(input);
+    } catch (error) {
+      if (error instanceof Error) throw new UnprocessableEntityException(error.message);
+      throw error;
+    }
+  }
+
   @Post('workspace/timer')
   timer(@Body() command: unknown) {
     try {
