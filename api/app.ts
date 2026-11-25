@@ -8,6 +8,8 @@ import { NestFactory } from '@nestjs/core';
 import { Workspace } from '../src/domain.js';
 import type { Collection, Repository, Row, Snapshot } from '../src/domain.js';
 import { recordInput } from './input.js';
+import { betaModule } from './beta/http.js';
+import type { BetaOptions } from './beta/http.js';
 
 class MemoryRepository implements Repository {
   private snapshot?: Snapshot;
@@ -113,6 +115,7 @@ class RecordsController {
 @Module({ controllers: [HealthController, RecordsController] })
 class ApiModule {}
 
-export function createApi(options: NestApplicationOptions = {}) {
-  return NestFactory.create(ApiModule, { abortOnError: false, ...options });
+export function createApi(options: NestApplicationOptions = {}, beta?: BetaOptions) {
+  const module = beta ? betaModule(beta, [HealthController, RecordsController]) : ApiModule;
+  return NestFactory.create(module, { abortOnError: false, ...options });
 }

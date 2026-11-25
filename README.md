@@ -47,3 +47,7 @@ npm run build
 - Evolução da persistência: PostgreSQL com isolamento por workspace.
 
 [Documentação do projeto](docs/README.md) · [Aviso de propriedade intelectual](docs/11-propriedade-intelectual/README.md)
+
+## Fundação da Beta
+
+A Sprint 01 prepara o esquema PostgreSQL de empresas, membros, equipes, convites e auditoria. O aplicativo utiliza a persistência demonstrativa da Alpha. Consulte o [changelog](CHANGELOG.md), a [arquitetura multi-tenant](docs/04-arquitetura/multi-tenant-beta.md), as [migrations](docs/05-banco-de-dados/README.md#migrations) e o [roteiro de homologação](docs/09-testes/README.md#homologação--sprint-01-da-beta). A Sprint 02 disponibiliza autenticação e gestão de empresas em modo DEMO local. A API persistente e a execução real das migrations continuam pendentes. Veja [execução local, rotas e limites da Sprint 02](docs/04-arquitetura/sprint-02.md).

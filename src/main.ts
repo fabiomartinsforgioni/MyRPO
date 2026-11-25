@@ -1,3 +1,5 @@
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { BetaPage, betaCsrf } from './beta';
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { registerLocaleData } from '@angular/common';
@@ -23,7 +25,7 @@ const menu = [
   ['dashboard', 'Dashboard', 'an an-fill an-house'], ['clientes', 'Clientes', 'an an-fill an-users'], ['chamados', 'Chamados', 'an an-fill an-ticket'],
   ['projetos', 'Projetos', 'an an-fill an-folder'], ['horas', 'Controle de horas', 'an an-fill an-clock'], ['estatisticas', 'Estatísticas', 'an an-fill an-chart-bar'],
   ['conhecimento', 'Base de conhecimento', 'an an-fill an-book'], ['relatorios-internos', 'Relatórios internos', 'an an-fill an-file-text'],
-  ['relatorios-clientes', 'Relatórios para clientes', 'an an-fill an-file-text'], ['configuracoes', 'Configurações', 'an an-fill an-gear'],
+  ['relatorios-clientes', 'Relatórios para clientes', 'an an-fill an-file-text'], ['configuracoes', 'Configurações', 'an an-fill an-gear'], ['beta', 'Conta e empresas', 'an an-user'],
   ['lixeira', 'Lixeira', 'an an-fill an-trash'],
 ];
 const titles = Object.fromEntries(menu.map(([id, label]) => [id, label]));
@@ -375,9 +377,11 @@ class AppComponent {
 workspace.initialize().then(() => bootstrapApplication(AppComponent, {
   providers: [
     provideAnimations(),
+    provideHttpClient(withInterceptors([betaCsrf])),
     provideRouter([
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: DashboardComponent },
+      { path: 'beta', component: BetaPage },
       ...(['clientes', 'chamados', 'projetos'] as const).map(collection =>
         ({ path: collection, component: RecordsComponent, data: { collection } })),
       { path: 'conhecimento', component: KnowledgePageComponent },
@@ -387,7 +391,7 @@ workspace.initialize().then(() => bootstrapApplication(AppComponent, {
       { path: 'estatisticas', component: StatisticsPageComponent },
       { path: 'lixeira', component: RecordsComponent, data: { collection: 'chamados', trash: true } },
       { path: 'configuracoes', component: SettingsComponent },
-      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas' && path !== 'horas' && path !== 'conhecimento' && path !== 'lixeira' && !path.startsWith('relatorios-')).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
+      ...menu.slice(4).filter(([path]) => path !== 'beta' && path !== 'configuracoes' && path !== 'estatisticas' && path !== 'horas' && path !== 'conhecimento' && path !== 'lixeira' && !path.startsWith('relatorios-')).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
       { path: '**', redirectTo: 'dashboard' },
     ], withHashLocation()),
   ],

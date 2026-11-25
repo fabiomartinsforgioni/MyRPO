@@ -39,3 +39,5 @@ Invoke-RestMethod http://127.0.0.1:3000/api/v1/clientes -Method Post -ContentTyp
 Ao salvar com a opção `?include=workspace`, a API devolve o cadastro e o snapshot da mesma operação. O Angular usa esse retorno para atualizar tabelas, histórico e indicadores. As origens são independentes e a alternância não migra cadastros. PostgreSQL, autenticação e isolamento entre workspaces entram em etapas posteriores.
 
 [Controllers do NestJS](https://docs.nestjs.com/controllers) · [Requisitos do NestJS](https://docs.nestjs.com/first-steps)
+
+A [API demonstrativa da Sprint 02](sprint-02.md) usa o namespace /api/v1/beta e exige MYRPO_MODE=DEMO.
