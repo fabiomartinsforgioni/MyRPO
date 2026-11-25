@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { Workspace, timeTotals } from '../src/domain.ts';
+
+test('cronômetro único pausa, retoma e impede finalizar o chamado em uso', () => {
+  let state;
+  const workspace = new Workspace({ load: () => state, save: value => { state = value; } });
+  const cliente = workspace.save('clientes', { nome: 'Cliente fictício' });
+  const projeto = workspace.save('projetos', { nome: 'Projeto fictício', clienteId: cliente.id, horasContratadas: 2 });
+  const chamado = workspace.save('chamados', { nome: 'Chamado fictício', clienteId: cliente.id, projetoId: projeto.id });
+  const start = { action: 'start', ticketId: chamado.id, activity: 'Análise' };
+  const finish = { action: 'finish', internal: 'Diagnóstico', external: 'Diagnóstico concluído', billable: false };
+  workspace.applyHours(start, 1000);
+  assert.throws(() => workspace.applyHours(start, 1001), /cronômetro em uso/);
+  assert.throws(() => workspace.save('chamados', { ...chamado, status: 'Finalizado' }), /cronômetro/);
+  assert.throws(() => workspace.save('chamados', { ...chamado, excluido: true }), /cronômetro/);
+  workspace.applyHours({ action: 'pause' }, 3000);
+  workspace.applyHours({ action: 'resume' }, 10000);
+  assert.throws(() => workspace.applyHours(finish, 13000), /justificativa/);
+  workspace.applyHours({ ...finish, reason: 'Aprendizado interno' }, 13000);
+  assert.equal(workspace.state.timer, null);
+  const entry = workspace.state.hours[0];
+  assert.equal(entry.durationMs, 5000);
+  assert.equal(entry.projectId, projeto.id);
+  assert.equal(entry.billable, false);
+  assert.deepEqual(timeTotals([entry]), { billed: 0, unbilled: 5000 / 3600000, total: 5000 / 3600000 });
+  assert.equal(entry.external, 'Diagnóstico concluído');
+  const finalized = workspace.save('chamados', { ...chamado, status: 'Finalizado' });
+  const trashed = workspace.save('chamados', { ...finalized, excluido: true });
+  assert.equal(trashed.status, 'Finalizado');
+  const restored = workspace.save('chamados', { ...trashed, excluido: false });
+  assert.equal(restored.numero, chamado.numero);
+  assert.match(workspace.trail(chamado.id)[0].message, /Restaurado da lixeira/);
+});

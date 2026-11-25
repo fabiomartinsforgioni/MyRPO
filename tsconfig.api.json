@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "strict": true,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": "dist/api",
+    "noEmitOnError": true
+  },
+  "include": [
+    "api/**/*.ts"
+  ]
+}

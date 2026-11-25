@@ -1,0 +1,394 @@
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { registerLocaleData } from '@angular/common';
+import localePt from '@angular/common/locales/pt';
+import { FormsModule } from '@angular/forms';
+import { bootstrapApplication } from '@angular/platform-browser';
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet, provideRouter, withHashLocation } from '@angular/router';
+import { PoButtonModule } from '@po-ui/ng-components';
+
+import { allowedStatuses, priorities, statuses, timeTotals, types } from './domain';
+import type { Collection, Row } from './domain';
+import { WorkspaceStore } from './workspace-store';
+import { StatisticsComponent } from './statistics';
+import { HoursComponent } from './hours';
+import { KnowledgeComponent } from './knowledge';
+import { TechnicalCatalogComponent } from './technical-catalog';
+import { ReportsComponent } from './reports';
+
+registerLocaleData(localePt);
+const workspace = new WorkspaceStore();
+const menu = [
+  ['dashboard', 'Dashboard', 'an an-fill an-house'], ['clientes', 'Clientes', 'an an-fill an-users'], ['chamados', 'Chamados', 'an an-fill an-ticket'],
+  ['projetos', 'Projetos', 'an an-fill an-folder'], ['horas', 'Controle de horas', 'an an-fill an-clock'], ['estatisticas', 'Estatísticas', 'an an-fill an-chart-bar'],
+  ['conhecimento', 'Base de conhecimento', 'an an-fill an-book'], ['relatorios-internos', 'Relatórios internos', 'an an-fill an-file-text'],
+  ['relatorios-clientes', 'Relatórios para clientes', 'an an-fill an-file-text'], ['configuracoes', 'Configurações', 'an an-fill an-gear'],
+  ['lixeira', 'Lixeira', 'an an-fill an-trash'],
+];
+const titles = Object.fromEntries(menu.map(([id, label]) => [id, label]));
+const tabs: Record<Collection, string[]> = {
+  clientes: ['Visão geral'],
+  chamados: ['Visão geral', 'Histórico', 'Diagnóstico', 'Solução', 'Fontes', 'Anexos', 'Testes', 'Validação', 'Horas'],
+  projetos: ['Visão geral', 'Chamados', 'Fontes', 'Documentação', 'Anexos', 'Anotações', 'Horas', 'Testes e validações', 'Histórico'],
+};
+const detailNotes: Record<string, string> = {
+  Diagnóstico: 'diagnostico',
+  Solução: 'solucao',
+  Testes: 'testes',
+  Validação: 'validacao',
+  Anotações: 'anotacoes',
+  'Testes e validações': 'testesValidacoes',
+};
+
+type Field = { key: string; label: string; type?: string; options?: string[]; required?: boolean };
+const fields: Record<Collection, Field[]> = {
+  clientes: [
+    { key: 'nome', label: 'Nome', required: true }, { key: 'razaoSocial', label: 'Razão social' },
+    { key: 'cnpj', label: 'CNPJ (opcional)' }, { key: 'contato', label: 'Contato' },
+    { key: 'email', label: 'E-mail', type: 'email' }, { key: 'telefone', label: 'Telefone', type: 'tel' },
+    { key: 'situacao', label: 'Situação', options: ['Ativo', 'Inativo'] },
+    { key: 'observacoes', label: 'Observações', type: 'textarea' },
+  ],
+  chamados: [
+    { key: 'nome', label: 'Título', required: true }, { key: 'numeroExterno', label: 'Número externo' },
+    { key: 'clienteId', label: 'Cliente', required: true }, { key: 'projetoId', label: 'Projeto (opcional)' },
+    { key: 'tipo', label: 'Tipo', options: types }, { key: 'prioridade', label: 'Prioridade', options: priorities },
+    { key: 'status', label: 'Status', options: statuses }, { key: 'modulo', label: 'Módulo' },
+    { key: 'rotina', label: 'Rotina' }, { key: 'release', label: 'Release' },
+    { key: 'ambiente', label: 'Ambiente' }, { key: 'solicitante', label: 'Solicitante' },
+    { key: 'previsao', label: 'Previsão de entrega', type: 'date' },
+    { key: 'horasPrevistas', label: 'Horas previstas', type: 'number' },
+    { key: 'pendencia', label: 'Há pendência', type: 'checkbox' },
+    { key: 'arquivado', label: 'Arquivado', type: 'checkbox' },
+    { key: 'descricao', label: 'Descrição', type: 'textarea' },
+    { key: 'erro', label: 'Mensagem de erro', type: 'textarea' },
+  ],
+  projetos: [
+    { key: 'nome', label: 'Nome', required: true }, { key: 'clienteId', label: 'Cliente', required: true },
+    { key: 'horasContratadas', label: 'Horas contratadas (vazio para ilimitado)', type: 'number' },
+    { key: 'situacao', label: 'Situação', options: ['Ativo', 'Encerrado'] },
+    { key: 'descricao', label: 'Descrição', type: 'textarea' },
+  ],
+};
+
+@Component({
+  standalone: true,
+  imports: [DatePipe, DecimalPipe, RouterLink],
+  template: `
+    <section class="heading dashboard-heading"><div><h1>Dashboard</h1><p>Acompanhe seus atendimentos e projetos.</p></div>
+      <a class="primary" routerLink="/chamados" [queryParams]="{novo: 1}"><span class="action-label">Novo chamado</span><span class="action-icon" aria-hidden="true"><span class="an an-fill an-plus"></span></span></a>
+    </section>
+    <div class="metrics">
+      @for (metric of metrics; track metric.label) {
+        <article class="metric" [attr.data-tone]="metric.tone"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></article>
+      }
+    </div>
+    <div class="dashboard-grid"><section class="panel activity-panel"><h2>Atividades recentes</h2>
+      @for (event of recent; track $index) {
+        <div class="event"><span>{{ event.message }}</span><time>{{ event.date | date:'dd/MM HH:mm' }}</time></div>
+      } @empty { <p class="empty">As atividades aparecem aqui quando você salva um cadastro.</p> }
+    </section>
+    <section class="panel dashboard-links"><h2>Operação</h2>
+      <p>Horas trabalhadas <strong>{{ hours.total | number:'1.2-4':'pt-BR' }} h</strong></p>
+      <p>Horas faturáveis <strong>{{ hours.billed | number:'1.2-4':'pt-BR' }} h</strong></p>
+      <a routerLink="/clientes">Clientes <span aria-hidden="true">→</span></a>
+      <a routerLink="/chamados">Chamados <span aria-hidden="true">→</span></a>
+      <a routerLink="/projetos">Projetos <span aria-hidden="true">→</span></a>
+      <a routerLink="/horas">Controle de horas <small>{{ timerStatus }}</small></a>
+    </section></div>
+    @if (projectsNearLimit.length) {
+      <section class="panel">
+        <h2>Projetos próximos do limite contratado</h2>
+        @for (project of projectsNearLimit; track project.id) {
+          <div class="event"><span>{{ project.nome }}</span>
+            <strong>{{ project.billed | number:'1.2-4':'pt-BR' }} de {{ project.limit }} h</strong></div>
+        }
+      </section>
+    }
+  `,
+})
+class DashboardComponent {
+  readonly hours = timeTotals(workspace.state.hours ?? []);
+  readonly projectsNearLimit = workspace.state.projetos.flatMap(project => {
+    const limit = project.horasContratadas;
+    if (project.situacao !== 'Ativo' || typeof limit !== 'number' || limit <= 0) return [];
+    const { billed } = timeTotals((workspace.state.hours ?? []).filter(entry => entry.projectId === project.id));
+    return billed / limit >= 0.8 ? [{ id: project.id, nome: project.nome, billed, limit }] : [];
+  });
+  readonly timerStatus = workspace.state.timer ? (workspace.state.timer.runningSince === null ? 'Pausado' : 'Em execução') : 'Sem cronômetro ativo';
+  private readonly active = workspace.state.chamados.filter(row => !row.arquivado && !row.excluido);
+  readonly recent = workspace.state.history.slice(0, 8);
+  readonly metrics = [
+    ...statuses.map((label, index) => ({ label, tone: index, value: this.active.filter(row => row.status === label).length })),
+    { label: 'Urgentes e críticos em aberto', tone: 4, value: this.active.filter(row => row.status !== 'Finalizado' &&
+      ['Urgente', 'Crítica'].includes(String(row.prioridade))).length },
+    { label: 'Projetos ativos', tone: 5, value: workspace.state.projetos.filter(row => row.situacao === 'Ativo').length },
+  ];
+}
+
+@Component({
+  standalone: true,
+  imports: [FormsModule, DatePipe, DecimalPipe, PoButtonModule, TechnicalCatalogComponent],
+  templateUrl: './records.html',
+})
+class RecordsComponent {
+  readonly store = workspace;
+  private readonly route = inject(ActivatedRoute);
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  readonly collection = this.route.snapshot.data['collection'] as Collection;
+  readonly trash = Boolean(this.route.snapshot.data['trash']);
+  readonly title = this.trash ? 'Lixeira' : titles[this.collection];
+  readonly fields = fields[this.collection];
+  readonly tabs = tabs[this.collection];
+  readonly priorities = priorities;
+  readonly statuses = statuses;
+  query = '';
+  status = '';
+  priority = '';
+  clientFilter = '';
+  showArchived = false;
+  edit: Partial<Row> | null = null;
+  selected: Row | null = null;
+  tab = 'Visão geral';
+  noteDraft = '';
+  error = '';
+  notice = '';
+  saving = false;
+  readonly available = workspace.available;
+
+  constructor() {
+    if (!this.trash && this.route.snapshot.queryParamMap.has('novo')) this.start();
+  }
+
+  get clients() { return workspace.state.clientes; }
+  get projects() { return workspace.state.projetos.filter(row => row.clienteId === this.edit?.clienteId); }
+  get rows() {
+    const query = this.query.trim().toLocaleLowerCase('pt-BR');
+    return workspace.state[this.collection].filter(row =>
+      (!query || [row.nome, row.numero, row.numeroExterno, this.clientName(row.clienteId)]
+        .some(value => String(value ?? '').toLocaleLowerCase('pt-BR').includes(query))) &&
+      (!this.status || (row.status ?? row.situacao) === this.status) &&
+      (!this.priority || row.prioridade === this.priority) &&
+      (!this.clientFilter || row.clienteId === this.clientFilter) &&
+      (this.collection !== 'chamados' || (this.trash ? Boolean(row.excluido) : !row.excluido && this.showArchived === Boolean(row.arquivado))));
+  }
+  get linked() { return workspace.state.chamados.filter(row => row.projetoId === this.selected?.id && !row.excluido); }
+  get hours() {
+    return (workspace.state.hours ?? []).filter(entry => this.collection === 'projetos'
+      ? entry.projectId === this.selected?.id : entry.ticketId === this.selected?.id);
+  }
+  get hourTotals() { return timeTotals(this.hours); }
+  get history() { return this.selected ? workspace.trail(this.selected.id) : []; }
+
+  projectName(id: Row[string]) { return workspace.state.projetos.find(row => row.id === id)?.nome ?? '—'; }
+
+  clientName(id: Row[string]) {
+    return this.clients.find(row => row.id === id)?.nome ?? '—';
+  }
+
+  start(row?: Row) {
+    this.notice = '';
+    this.error = '';
+    this.edit = row ? { ...row } : this.collection === 'chamados'
+      ? { nome: '', status: 'Aberto', tipo: 'Suporte', prioridade: 'Normal', clienteId: '', projetoId: '' }
+      : { nome: '', situacao: 'Ativo' };
+  }
+
+  options(field: Field) {
+    if (field.key !== 'status') return field.options ?? [];
+    if (!this.edit?.id) return ['Aberto'];
+    return allowedStatuses(String(this.selected?.status ?? 'Aberto'));
+  }
+
+  open(row: Row) {
+    this.edit = null;
+    this.selected = row;
+    this.tab = 'Visão geral';
+  }
+
+  get noteField() { return detailNotes[this.tab]; }
+
+  selectTab(tab: string) {
+    this.tab = tab;
+    this.notice = '';
+    this.noteDraft = String(this.selected?.[detailNotes[tab]] ?? '');
+  }
+
+  async saveNote() {
+    if (!this.selected || !this.noteField || this.trash || this.saving) return;
+    this.saving = true;
+    try {
+      this.selected = await workspace.save(this.collection, {
+        id: this.selected.id, nome: this.selected.nome, [this.noteField]: this.noteDraft,
+      });
+      this.notice = 'Anotação salva.';
+    } catch (error) {
+      this.notice = error instanceof Error ? error.message : 'Não foi possível salvar a anotação.';
+    } finally {
+      this.saving = false;
+      this.changeDetector.markForCheck();
+    }
+  }
+
+  async changeTrash() {
+    if (!this.selected || this.saving) return;
+    this.saving = true;
+    try {
+      await workspace.save('chamados', { ...this.selected, excluido: !this.trash });
+      this.selected = null;
+      this.notice = this.trash ? 'Chamado restaurado.' : 'Chamado movido para a lixeira.';
+    } catch (error) {
+      this.notice = error instanceof Error ? error.message : 'Não foi possível atualizar a lixeira.';
+    } finally {
+      this.saving = false;
+      this.changeDetector.markForCheck();
+    }
+  }
+
+  async save() {
+    if (!this.edit || this.saving) return;
+    this.saving = true;
+    try {
+      const validFields = Object.fromEntries(this.fields.map(field => [field.key, this.edit?.[field.key]]));
+      const result = await workspace.save(this.collection, { ...validFields, id: this.edit.id });
+      this.open(result);
+      this.notice = 'Cadastro salvo.';
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : 'Não foi possível salvar o cadastro.';
+    } finally {
+      this.saving = false;
+      this.changeDetector.markForCheck();
+    }
+  }
+}
+
+@Component({
+  standalone: true,
+  template: `<section class="heading"><h1>{{ title }}</h1></section>
+    <section class="panel"><h2>Planejado</h2><p>Este módulo está previsto no roadmap da Alpha.</p></section>`,
+})
+class PlannedComponent {
+  readonly title = inject(ActivatedRoute).snapshot.data['title'] as string;
+}
+
+@Component({
+  standalone: true,
+  template: `
+    <section class="heading"><h1>Configurações</h1></section>
+    <section class="panel">
+      <h2>Origem dos cadastros</h2>
+      <p>Modo atual: {{ mode === 'api' ? 'API demonstrativa' : 'LocalStorage' }}.</p>
+      <p>O modo API usa os dados em memória do servidor. Os cadastros locais continuam disponíveis ao voltar para LocalStorage.</p>
+      <button type="button" (click)="changeMode()">{{ mode === 'api' ? 'Usar LocalStorage' : 'Usar API demonstrativa' }}</button>
+    </section>
+  `,
+})
+class SettingsComponent {
+  readonly mode = workspace.mode;
+
+  changeMode() {
+    localStorage.setItem('myrpo.persistence', this.mode === 'api' ? 'local' : 'api');
+    location.reload();
+  }
+}
+@Component({
+  standalone: true,
+  imports: [StatisticsComponent],
+  template: '<myrpo-statistics [snapshot]="snapshot" />',
+})
+class StatisticsPageComponent {
+  get snapshot() { return workspace.state; }
+}
+
+@Component({
+  standalone: true,
+  imports: [HoursComponent],
+  template: '<myrpo-hours [store]="store" />',
+})
+class HoursPageComponent {
+  readonly store = workspace;
+}
+
+@Component({
+  standalone: true,
+  imports: [ReportsComponent],
+  template: '<myrpo-reports [snapshot]="snapshot" [external]="external" />',
+})
+class ReportsPageComponent {
+  readonly external = Boolean(inject(ActivatedRoute).snapshot.data['external']);
+  get snapshot() { return workspace.state; }
+}
+@Component({
+  standalone: true,
+  imports: [KnowledgeComponent],
+  template: '<myrpo-knowledge [store]="store" />',
+})
+class KnowledgePageComponent {
+  readonly store = workspace;
+}
+@Component({
+  selector: 'myrpo-app',
+  standalone: true,
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  template: `
+    <div class="shell" [class.light]="light" [class.collapsed]="collapsed">
+      <aside id="workspace-menu">
+        <a class="brand" routerLink="/dashboard" aria-label="MyRPO · Dashboard"><img [src]="collapsed ? 'assets/MyRPO-icon.png' : light ? 'assets/MyRPO.png' : 'assets/MyRPO-dark.png'" alt=""></a>
+        <nav aria-label="Menu principal">
+          @for (item of menu; track item[0]) {
+            <a [routerLink]="item[0]" routerLinkActive="active" ariaCurrentWhenActive="page" [attr.aria-label]="item[1]"
+              [title]="item[1]" [attr.data-module]="item[0]" (click)="onNavigate()"><span class="nav-icon" [class]="item[2]" aria-hidden="true"></span><span>{{ item[1] }}</span></a>
+          }
+        </nav>
+      </aside>
+      <div class="body">
+        <header>
+          <button type="button" (click)="collapsed = !collapsed" aria-label="Alternar menu" aria-controls="workspace-menu"
+            [attr.aria-expanded]="!collapsed"><span class="an an-fill an-list" aria-hidden="true"></span></button>
+          <span class="workspace">Consultoria · {{ mode === 'api' ? 'API demonstrativa' : 'Demonstração local' }}</span>
+          <button type="button" class="theme" (click)="toggleTheme()"><span [class]="light ? 'an an-fill an-moon' : 'an an-fill an-sun'" aria-hidden="true"></span>{{ light ? 'Tema escuro' : 'Tema claro' }}</button>
+        </header>
+        <main>@if (!available) { <p class="error" role="alert">API indisponível. Inicie o servidor e recarregue, ou selecione o modo LocalStorage em Configurações.</p> }<router-outlet /></main>
+      </div>
+    </div>
+  `,
+})
+class AppComponent {
+  readonly menu = menu;
+  readonly mode = workspace.mode;
+  readonly available = workspace.available;
+  light = localStorage.getItem('myrpo.theme') === 'light';
+  collapsed = matchMedia('(max-width: 700px)').matches;
+
+
+  onNavigate() {
+    if (matchMedia('(max-width: 700px)').matches) this.collapsed = true;
+  }
+
+  toggleTheme() {
+    this.light = !this.light;
+    localStorage.setItem('myrpo.theme', this.light ? 'light' : 'dark');
+  }
+}
+
+workspace.initialize().then(() => bootstrapApplication(AppComponent, {
+  providers: [
+    provideAnimations(),
+    provideRouter([
+      { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+      { path: 'dashboard', component: DashboardComponent },
+      ...(['clientes', 'chamados', 'projetos'] as const).map(collection =>
+        ({ path: collection, component: RecordsComponent, data: { collection } })),
+      { path: 'conhecimento', component: KnowledgePageComponent },
+      { path: 'horas', component: HoursPageComponent },
+      { path: 'relatorios-internos', component: ReportsPageComponent },
+      { path: 'relatorios-clientes', component: ReportsPageComponent, data: { external: true } },
+      { path: 'estatisticas', component: StatisticsPageComponent },
+      { path: 'lixeira', component: RecordsComponent, data: { collection: 'chamados', trash: true } },
+      { path: 'configuracoes', component: SettingsComponent },
+      ...menu.slice(4).filter(([path]) => path !== 'configuracoes' && path !== 'estatisticas' && path !== 'horas' && path !== 'conhecimento' && path !== 'lixeira' && !path.startsWith('relatorios-')).map(([path, title]) => ({ path, component: PlannedComponent, data: { title } })),
+      { path: '**', redirectTo: 'dashboard' },
+    ], withHashLocation()),
+  ],
+})).catch(error => console.error('Falha ao iniciar o MyRPO:', error));
