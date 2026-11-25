@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import type { HttpInterceptorFn } from '@angular/common/http';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PoButtonModule } from '@po-ui/ng-components';
 import { firstValueFrom } from 'rxjs';
@@ -156,6 +156,7 @@ type Action = 'login' | 'register' | 'verify' | 'resend' | 'recover' | 'reset';
 })
 export class BetaPage {
   private readonly http = inject(HttpClient);
+  private readonly changeDetector = inject(ChangeDetectorRef);
   private destroyed = false;
   profile?: Profile;
   teams: Team[] = [];
@@ -211,7 +212,10 @@ export class BetaPage {
           ? error.error?.message ?? 'Não foi possível concluir. Confira se a API DEMO está disponível.'
           : error instanceof Error ? error.message : 'Não foi possível concluir.';
       }
-    } finally { this.busy = false; }
+    } finally {
+      this.busy = false;
+      if (!this.destroyed) this.changeDetector.markForCheck();
+    }
   }
 
   private get<T>(path: string) { return firstValueFrom(this.http.get<T>(base + path)); }
