@@ -12,7 +12,8 @@ export interface BetaOptions {
   mode: 'DEMO' | 'POSTGRES';
   origin?: string;
   deliver?: (mail: Mail) => void;
-  identity?: Pick<PostgresIdentity, 'login' | 'logout' | 'profile' | 'register' | 'request' | 'reset' | 'switchCompany' | 'verify'>;
+  identity?: Pick<PostgresIdentity, 'addTeam' | 'createCompany' | 'invitations' | 'invite' | 'login' | 'logout'
+    | 'members' | 'profile' | 'register' | 'request' | 'reset' | 'switchCompany' | 'teams' | 'verify'>;
 }
 type Request = { headers: Record<string, string | undefined>; ip: string };
 type Response = { append(name: string, value: string): void };
@@ -253,6 +254,11 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
 
     @Post('companies')
     create(@Req() req: Request, @Body() body: unknown) {
+      if (identity) {
+        originCheck(req);
+        return identity.createCompany(cookie(req, sessionCookie) ?? '', req.headers['x-csrf-token'],
+          name(fields(body, ['name']).name));
+      }
       return companies.create(authenticated(req), name(fields(body, ['name']).name));
     }
 
@@ -274,18 +280,23 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
 
     @Get('teams')
     teams(@Req() req: Request) {
-      requireDemo();
+      if (identity) return identity.teams(cookie(req, sessionCookie) ?? '');
       return companies.teams(security.session(cookie(req, sessionCookie)));
     }
 
     @Post('teams')
     addTeam(@Req() req: Request, @Body() body: unknown) {
+      if (identity) {
+        originCheck(req);
+        return identity.addTeam(cookie(req, sessionCookie) ?? '', req.headers['x-csrf-token'],
+          name(fields(body, ['name']).name));
+      }
       return companies.addTeam(authenticated(req), name(fields(body, ['name']).name));
     }
 
     @Get('members')
     members(@Req() req: Request) {
-      requireDemo();
+      if (identity) return identity.members(cookie(req, sessionCookie) ?? '');
       return companies.members(security.session(cookie(req, sessionCookie)));
     }
 
@@ -306,13 +317,18 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
 
     @Get('invitations')
     invitations(@Req() req: Request) {
-      requireDemo();
+      if (identity) return identity.invitations(cookie(req, sessionCookie) ?? '');
       return companies.invitations(security.session(cookie(req, sessionCookie)));
     }
 
     @Post('invitations')
     invite(@Req() req: Request, @Body() body: unknown) {
       const input = fields(body, ['email', 'teamIds']);
+      if (identity) {
+        originCheck(req);
+        return identity.invite(cookie(req, sessionCookie) ?? '', req.headers['x-csrf-token'],
+          email(input.email), teamIds(input.teamIds));
+      }
       return companies.invite(authenticated(req), email(input.email), teamIds(input.teamIds));
     }
 

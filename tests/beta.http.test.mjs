@@ -125,6 +125,13 @@ test('composição PostgreSQL injeta identidade e usa cookies seguros sem dispon
     },
     logout: async (...args) => { calls.push(['logout', ...args]); },
     profile: async raw => ({ raw, companies: [{ id: companyId }] }),
+    createCompany: async (...args) => {
+      calls.push(['createCompany', ...args]);
+      return { id: companyId, name: 'Empresa fictícia' };
+    },
+    teams: async () => [{ id: 'equipe-ficticia', name: 'Equipe fictícia' }],
+    members: async () => [],
+    invitations: async () => [],
     switchCompany: async (...args) => {
       calls.push(['switch', ...args]);
       return { raw: 'nova-sessao', csrf: 'novo-csrf', companyId, role: 'ADMIN' };
@@ -158,14 +165,21 @@ test('composição PostgreSQL injeta identidade e usa cookies seguros sem dispon
   assert.equal(calls[0][1], 'teste@example.test');
   assert.equal((await fetch(base + 'health')).status, 200);
   assert.equal((await fetch(base + 'clientes')).status, 404);
-  assert.equal((await fetch(base + 'beta/teams')).status, 404);
+  assert.deepEqual(await (await fetch(base + 'beta/teams')).json(), [
+    { id: 'equipe-ficticia', name: 'Equipe fictícia' },
+  ]);
   const profile = await fetch(base + 'beta/auth/me', { headers: { cookie: session.split(';')[0] } });
   assert.equal(profile.headers.get('cache-control'), 'no-store');
   assert.deepEqual((await profile.json()).companies, [{ id: companyId }]);
-  const switched = await send('companies/switch', { companyId }, {
+  const sessionHeaders = {
     cookie: session.split(';')[0],
     'x-csrf-token': (await login.json()).csrf,
-  });
+  };
+  const company = await send('companies', { name: 'Empresa fictícia' }, sessionHeaders);
+  assert.equal(company.status, 201);
+  assert.deepEqual(await company.json(), { id: companyId, name: 'Empresa fictícia' });
+  assert.deepEqual(calls.at(-1), ['createCompany', 'sessao-ficticia', 'csrf-ficticio', 'Empresa fictícia']);
+  const switched = await send('companies/switch', { companyId }, sessionHeaders);
   assert.equal(switched.status, 200);
   assert.deepEqual(await switched.json(), { csrf: 'novo-csrf', companyId, role: 'ADMIN' });
   assert.deepEqual(calls.at(-1), ['switch', 'sessao-ficticia', 'csrf-ficticio', companyId]);

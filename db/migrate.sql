@@ -44,4 +44,13 @@ SELECT NOT EXISTS (
     INSERT INTO myrpo.schema_migrations (version) VALUES (4);
 \endif
 
+SELECT NOT EXISTS (
+    SELECT 1 FROM myrpo.schema_migrations WHERE version = 5
+) AS apply_company_bootstrap \gset
+
+\if :apply_company_bootstrap
+    \ir migrations/005_company_bootstrap.sql
+    INSERT INTO myrpo.schema_migrations (version) VALUES (5);
+\endif
+
 COMMIT;

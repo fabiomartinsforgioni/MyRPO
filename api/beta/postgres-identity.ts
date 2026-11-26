@@ -7,7 +7,7 @@ import {
   issuePostgresSession, PostgresChallenges, PostgresRateLimits, PostgresSessions, resetPostgresPassword,
   setTenantContext, touchPostgresSession, transaction,
 } from './postgres.js';
-import type { Pool } from './postgres.js';
+import type { Connection, Pool } from './postgres.js';
 import type { Mail } from './security.js';
 
 const opaque = /^[A-Za-z0-9_-]{43}$/;
@@ -203,6 +203,137 @@ export class PostgresIdentity {
       return membership.role;
     });
     return { raw: nextRaw, csrf, companyId, role };
+  }
+
+  async createCompany(raw: string, csrf: string | undefined, name: string) {
+    await this.session(raw, csrf);
+    return transaction(this.pool, async db => {
+      const result = await db.query<{ id: string; name: string }>(
+        'SELECT id, name FROM myrpo.create_session_company($1, $2)',
+        [hash(raw), name],
+      );
+      const company = result.rows[0];
+      if (!company) throw new UnauthorizedException('Sessão inválida.');
+      return company;
+    });
+  }
+
+  async teams(raw: string) {
+    return this.inCompany(await this.session(raw), false, async (db, companyId, userId, role) => {
+      const teams = await db.query<{ id: string; name: string }>(
+        `SELECT t.id, t.name FROM myrpo.teams AS t
+          WHERE t.company_id = $1 AND t.deactivated_at IS NULL
+            AND ($3::text = 'admin' OR EXISTS (
+              SELECT 1 FROM myrpo.team_memberships AS tm
+               WHERE tm.company_id = t.company_id AND tm.team_id = t.id
+                 AND tm.user_id = $2 AND tm.deactivated_at IS NULL))
+          ORDER BY t.name, t.id`,
+        [companyId, userId, role],
+      );
+      return teams.rows;
+    });
+  }
+
+  async addTeam(raw: string, csrf: string | undefined, name: string) {
+    return this.inCompany(await this.session(raw, csrf), true, async (db, companyId, userId) => {
+      const inserted = await db.query<{ id: string; name: string }>(
+        'INSERT INTO myrpo.teams (company_id, name) VALUES ($1, $2) RETURNING id, name',
+        [companyId, name],
+      );
+      const team = inserted.rows[0];
+      await db.query(
+        `INSERT INTO myrpo.audit_logs (company_id, actor_user_id, action, entity_type, entity_id, correlation_id, outcome)
+         VALUES ($1, $2, 'TEAM_CREATED', 'team', $3, $4, 'success')`,
+        [companyId, userId, team.id, globalThis.crypto.randomUUID()],
+      );
+      return team;
+    }, true);
+  }
+
+  async members(raw: string) {
+    return this.inCompany(await this.session(raw), true, async (db, companyId) => {
+      const members = await db.query<{ id: string; role: 'ADMIN' | 'CONSULTANT'; active: boolean; teamIds: string[] }>(
+        `SELECT m.user_id AS id, upper(m.role) AS role, m.deactivated_at IS NULL AS active,
+                ARRAY(SELECT tm.team_id FROM myrpo.team_memberships AS tm
+                        JOIN myrpo.teams AS t ON t.company_id = tm.company_id AND t.id = tm.team_id
+                       WHERE tm.company_id = m.company_id AND tm.user_id = m.user_id
+                         AND tm.deactivated_at IS NULL AND t.deactivated_at IS NULL
+                       ORDER BY tm.team_id) AS "teamIds"
+           FROM myrpo.company_memberships AS m WHERE m.company_id = $1 ORDER BY m.created_at, m.user_id`,
+        [companyId],
+      );
+      return members.rows;
+    });
+  }
+
+  async invitations(raw: string) {
+    return this.inCompany(await this.session(raw), true, async (db, companyId) => {
+      const invitations = await db.query<{ id: string; email: string; used: boolean; expires: number }>(
+        `SELECT id, recipient_email AS email, redeemed_at IS NOT NULL AS used,
+                extract(epoch FROM expires_at)::double precision * 1000 AS expires
+           FROM myrpo.invitations WHERE company_id = $1 AND revoked_at IS NULL AND recipient_email IS NOT NULL
+          ORDER BY created_at, id`,
+        [companyId],
+      );
+      return invitations.rows;
+    });
+  }
+
+  async invite(raw: string, csrf: string | undefined, email: string, teamIds: string[]) {
+    const teams = [...new Set(teamIds.map(id => id.toLowerCase()))];
+    const session = await this.session(raw, csrf);
+    if (teams.some(id => !uuid.test(id))) throw new NotFoundException('Equipe indisponível.');
+    return this.inCompany(session, true, async (db, companyId, userId) => {
+      const found = await db.query(
+        'SELECT id FROM myrpo.teams WHERE company_id = $1 AND id = ANY($2::uuid[]) AND deactivated_at IS NULL',
+        [companyId, teams],
+      );
+      if (found.rowCount !== teams.length) throw new NotFoundException('Equipe indisponível.');
+      const code = token();
+      const created = await db.query<{ id: string }>(
+        `INSERT INTO myrpo.invitations (company_id, created_by, code_digest, recipient_email, expires_at)
+         VALUES ($1, $2, $3, $4, clock_timestamp() + interval '48 hours') RETURNING id`,
+        [companyId, userId, hash(code), email],
+      );
+      const { id } = created.rows[0];
+      await db.query(
+        `INSERT INTO myrpo.invitation_teams(company_id, invitation_id, team_id)
+         SELECT $1, $2, unnest($3::uuid[])`,
+        [companyId, id, teams],
+      );
+      await db.query(
+        `INSERT INTO myrpo.audit_logs (company_id, actor_user_id, action, entity_type, entity_id, correlation_id, outcome)
+         VALUES ($1, $2, 'INVITATION_CREATED', 'invitation', $3, $4, 'success')`,
+        [companyId, userId, id, globalThis.crypto.randomUUID()],
+      );
+      return { id, token: code };
+    }, true);
+  }
+
+  private inCompany<Result>(
+    session: Awaited<ReturnType<PostgresIdentity['session']>>, admin: boolean,
+    run: (db: Connection, companyId: string, userId: string, role: string) => Promise<Result>,
+    lockCompany = false,
+  ) {
+    const { user_id: userId, active_company_id: companyId } = session;
+    if (!companyId) throw new NotFoundException('Empresa indisponível.');
+    return transaction(this.pool, async db => {
+      await setTenantContext(db, userId, companyId);
+      if (lockCompany) {
+        await db.query('SELECT id FROM myrpo.companies WHERE id = $1 FOR UPDATE', [companyId]);
+      }
+      const membership = await db.query<{ role: string }>(
+        `SELECT m.role FROM myrpo.company_memberships AS m
+           JOIN myrpo.sessions AS s ON s.user_id = m.user_id AND s.active_company_id = m.company_id
+          WHERE m.company_id = $1 AND m.user_id = $2 AND m.deactivated_at IS NULL
+            AND s.id = $3 AND s.csrf_hash = $4 AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()`,
+        [companyId, userId, session.id, hash(session.csrf)],
+      );
+      const role = membership.rows[0]?.role;
+      if (!role) throw new NotFoundException('Empresa indisponível.');
+      if (admin && role !== 'admin') throw new ForbiddenException('Operação não autorizada.');
+      return run(db, companyId, userId, role);
+    });
   }
 
   async reset(raw: string, password: string, ip: string) {
