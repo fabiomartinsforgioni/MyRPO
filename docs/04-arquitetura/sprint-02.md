@@ -27,7 +27,9 @@ A migration `002_identity.sql` acrescenta sessões, desafios, limites de tentati
 
 A redefinição persistente de senha foi preparada como uma operação transacional. Ela trava a conta elegível antes de consumir o desafio, grava o novo hash, revoga todas as sessões da conta e registra a auditoria de sucesso. A emissão de sessão usa a mesma trava e confirma que o hash validado pelo serviço continua atual. A renovação da atividade instala, na própria transação, a empresa e o usuário obtidos da sessão persistida. A atualização revalida sessão, conta, vínculo e, para mutações, o digest CSRF fornecido pelo serviço.
 
-Os testes Node exercitam esses contratos, confirmação e rollback com conexão simulada. O teste HTTP do DEMO cobre duas sessões revogadas, rejeição do token reutilizado e autenticação com a nova senha. A composição HTTP persistente e a homologação de concorrência entre redefinição, emissão de desafio e login seguem pendentes.
+O serviço de identidade PostgreSQL reúne cadastro, verificação, reenvio, login, leitura de sessão, logout e recuperação. Ele aplica limites persistentes por IP e, quando aplicável, por e-mail. A chave CSRF de 32 bytes deve vir do mecanismo de segredos e ser estável entre reinícios. A troca da chave invalida sessões existentes. O envio de códigos depende de um adaptador injetado e ocorre depois da confirmação da transação.
+
+Os testes Node exercitam esses contratos, confirmação e rollback com conexão simulada. O teste HTTP do DEMO cobre duas sessões revogadas, rejeição do token reutilizado e autenticação com a nova senha. A ligação das rotas ao serviço persistente, a entrega de e-mail, os papéis definitivos e a homologação de concorrência entre redefinição, emissão de desafio e login seguem pendentes.
 
 ### RLS antes do piloto
 
@@ -39,7 +41,7 @@ A composição HTTP persistente precisa de operações restritas para autentica�
 
 O roteiro [tenant-isolation.sql](../../tests/postgres/tenant-isolation.sql) cobre ausência de contexto, leitura e inserção com vínculo ativo, tentativa de escrita em outra empresa, rollback do contexto e vínculo revogado. Em 26/11/2026, esses cenários passaram no PostgreSQL do projeto `myrpo-homolog` com papel temporário. Os blocos do editor SQL adaptaram os comandos do `psql` para execução transacional. A consulta de conferência retornou versões 1, 2 e 3, sete tabelas com RLS, zero registros fictícios remanescentes nas tabelas consultadas e ausência do papel temporário. Seguem pendentes o teste com as concessões finais do runtime e os cenários concorrentes.
 
-Em 26/11/2026, a API recompilada passou nos 18 testes Node e o frontend gerou o bundle com Node 24.22.3. A verificação HTTP usou o DEMO em loopback. A Sprint segue sem URL de homologação.
+Em 26/11/2026, a API recompilada passou nos 24 testes Node e o frontend gerou o bundle com Node 24.22.3. A verificação HTTP usou o DEMO em loopback. A Sprint segue sem URL de homologação.
 
 ### Horas e anexos
 

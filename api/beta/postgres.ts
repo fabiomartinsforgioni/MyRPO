@@ -116,6 +116,7 @@ export function touchPostgresSession(pool: Pool, tokenHash: Uint8Array, csrfHash
 
 export function issuePostgresSession(pool: Pool, input: {
   userId: string; verifiedPasswordHash: string; tokenHash: Uint8Array; csrfHash: Uint8Array;
+  previousTokenHash?: Uint8Array;
 }) {
   return transaction(pool, async db => {
     // A redefinição usa a mesma trava para serializar a emissão e a revogação.
@@ -129,13 +130,21 @@ export function issuePostgresSession(pool: Pool, input: {
     const authenticatedAt = account.rows[0]?.authenticated_at;
     if (!authenticatedAt) return undefined;
 
-    return new PostgresSessions(db).create({
+    const sessions = new PostgresSessions(db);
+    if (input.previousTokenHash) await sessions.revoke(input.previousTokenHash, 'login_replaced');
+    const session = await sessions.create({
       userId: input.userId,
       tokenHash: input.tokenHash,
       csrfHash: input.csrfHash,
       authenticatedAt,
       expiresAt: new Date(authenticatedAt.getTime() + 12 * 60 * 60_000),
     });
+    await db.query(
+      `INSERT INTO myrpo.security_audit_logs (actor_user_id, action, outcome, correlation_id)
+       VALUES ($1, 'LOGIN_SUCCEEDED', 'success', $2)`,
+      [input.userId, globalThis.crypto.randomUUID()],
+    );
+    return session;
   });
 }
 
@@ -143,7 +152,7 @@ export class PostgresChallenges {
   constructor(private readonly db: Connection) {}
 
   async replace(userId: string, kind: 'verify' | 'reset', hash: Uint8Array, expiresAt: Date) {
-    await this.db.query('SELECT id FROM myrpo.users WHERE id = $1 FOR UPDATE', [userId]);
+    await this.db.query('SELECT id FROM myrpo.users WHERE id = $1 FOR NO KEY UPDATE', [userId]);
     await this.db.query(
       `UPDATE myrpo.identity_challenges SET invalidated_at = clock_timestamp()
         WHERE user_id = $1 AND kind = $2 AND invalidated_at IS NULL AND consumed_at IS NULL`,
