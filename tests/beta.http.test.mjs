@@ -113,3 +113,51 @@ test('Beta protege mutações, verifica identidade, isola empresas e revoga cook
 test('POSTGRES falha quando a persistência não está configurada', async () => {
   await assert.rejects(async () => createApi({ logger: false }, { mode: 'POSTGRES' }), /PostgreSQL/i);
 });
+
+test('composição PostgreSQL injeta identidade e usa cookies seguros sem disponibilizar rotas Alpha', async t => {
+  const calls = [];
+  const origin = 'https://homolog.example.test';
+  const identity = {
+    login: async (...args) => {
+      calls.push(['login', ...args]);
+      return { raw: 'sessao-ficticia', csrf: 'csrf-ficticio' };
+    },
+    logout: async (...args) => { calls.push(['logout', ...args]); },
+  };
+  const app = await createApi({ logger: false }, { mode: 'POSTGRES', origin, identity });
+  t.after(() => app.close());
+  await app.listen(0, '127.0.0.1');
+  const base = (await app.getUrl()) + '/api/v1/';
+
+  const send = (path, body, headers = {}) => fetch(base + 'beta/' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin, ...headers },
+    body: JSON.stringify(body),
+  });
+  const challenge = await send('auth/csrf', {});
+  assert.equal(challenge.status, 200);
+  const preauth = challenge.headers.get('set-cookie');
+  assert.match(preauth, /^__Host-myrpo_preauth=.*; Path=\/; HttpOnly; SameSite=Lax; Max-Age=900; Secure$/);
+  const credentials = { email: 'TESTE@example.test', password: 'senha fictícia' };
+  assert.equal((await send('auth/login', credentials, { origin: 'https://outro.example.test' })).status, 403);
+  assert.equal(calls.length, 0);
+  const login = await send('auth/login', credentials, {
+    cookie: preauth.split(';')[0],
+    'x-csrf-token': (await challenge.json()).csrf,
+  });
+  assert.equal(login.status, 200);
+  assert.equal(login.headers.get('cache-control'), 'no-store');
+  const session = login.headers.get('set-cookie');
+  assert.match(session, /^__Host-myrpo_session=sessao-ficticia; Path=\/; HttpOnly; SameSite=Lax; Max-Age=43200; Secure$/);
+  assert.equal(calls[0][1], 'teste@example.test');
+  assert.equal((await fetch(base + 'health')).status, 200);
+  assert.equal((await fetch(base + 'clientes')).status, 404);
+  assert.equal((await fetch(base + 'beta/teams')).status, 404);
+  const logout = await send('auth/logout', {}, {
+    cookie: session.split(';')[0],
+    'x-csrf-token': (await login.json()).csrf,
+  });
+  assert.equal(logout.status, 200);
+  assert.match(logout.headers.get('set-cookie'), /Max-Age=0; Secure$/);
+  assert.deepEqual(calls.at(-1), ['logout', 'sessao-ficticia', 'csrf-ficticio']);
+});

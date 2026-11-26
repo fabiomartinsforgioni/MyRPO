@@ -116,6 +116,7 @@ class RecordsController {
 class ApiModule {}
 
 export function createApi(options: NestApplicationOptions = {}, beta?: BetaOptions) {
-  const module = beta ? betaModule(beta, [HealthController, RecordsController]) : ApiModule;
+  const controllers = beta?.mode === 'POSTGRES' ? [HealthController] : [HealthController, RecordsController];
+  const module = beta ? betaModule(beta, controllers) : ApiModule;
   return NestFactory.create(module, { abortOnError: false, ...options });
 }

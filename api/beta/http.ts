@@ -1,16 +1,18 @@
 import {
   BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Module,
-  Param, Patch, Post, Req, Res,
+  NotFoundException, Param, Patch, Post, Req, Res,
 } from '@nestjs/common';
 import type { Type } from '@nestjs/common';
 import { DemoCompanies } from './companies.js';
 import { DemoSecurity } from './security.js';
 import type { Mail } from './security.js';
+import type { PostgresIdentity } from './postgres-identity.js';
 
 export interface BetaOptions {
   mode: 'DEMO' | 'POSTGRES';
   origin?: string;
   deliver?: (mail: Mail) => void;
+  identity?: Pick<PostgresIdentity, 'login' | 'logout' | 'register' | 'request' | 'reset' | 'verify'>;
 }
 type Request = { headers: Record<string, string | undefined>; ip: string };
 type Response = { append(name: string, value: string): void };
@@ -54,25 +56,34 @@ function cookie(req: Request, key: string) {
   return req.headers.cookie?.split(/;\s*/).find(item => item.startsWith(key + '='))?.slice(key.length + 1);
 }
 
-function setCookie(res: Response, key: string, value: string, age: number) {
-  res.append('Set-Cookie', key + '=' + value + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + age);
-}
-
-const sessionCookie = 'myrpo_demo_session';
-const preCookie = 'myrpo_demo_preauth';
-
 export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
-  if (options.mode !== 'DEMO') throw new Error('Persistência PostgreSQL indisponível.');
+  const persistent = options.mode === 'POSTGRES';
+  const identity = persistent ? options.identity : undefined;
+  if (persistent && !identity) throw new Error('Persistência PostgreSQL indisponível.');
   const origin = options.origin ?? 'http://127.0.0.1:4200';
-  if (!/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(origin)) {
+  if (persistent) {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:' || url.origin !== origin) throw new Error('POSTGRES exige uma origem HTTPS.');
+  } else if (!/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(origin)) {
     throw new Error('DEMO exige uma origem HTTP local.');
   }
+  const sessionCookie = persistent ? '__Host-myrpo_session' : 'myrpo_demo_session';
+  const preCookie = persistent ? '__Host-myrpo_preauth' : 'myrpo_demo_preauth';
   const security = new DemoSecurity(options.deliver ?? (() => {}));
   const companies = new DemoCompanies(security);
 
+  function setCookie(res: Response, key: string, value: string, age: number) {
+    const secure = persistent ? '; Secure' : '';
+    res.append('Set-Cookie', key + '=' + value + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + age + secure);
+  }
+
+  function requireDemo() {
+    if (persistent) throw new NotFoundException('Recurso indisponível.');
+  }
+
   function originCheck(req: Request) {
     if (req.headers.origin !== origin) {
-      security.audit('ACCESS_DENIED');
+      if (!persistent) security.audit('ACCESS_DENIED');
       throw new ForbiddenException('Origem inválida.');
     }
   }
@@ -83,6 +94,7 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
   }
 
   function authenticated(req: Request) {
+    requireDemo();
     originCheck(req);
     return security.requireCsrf(cookie(req, sessionCookie), req.headers['x-csrf-token']);
   }
@@ -108,33 +120,43 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
     @Post('auth/register')
     async register(@Req() req: Request, @Body() body: unknown) {
       preauth(req);
-      security.limit('register:' + req.ip, 10, 15 * 60_000);
       const input = fields(body, ['name', 'email', 'password']);
-      await security.register(name(input.name), email(input.email), password(input.password));
+      const values = [name(input.name), email(input.email), password(input.password)] as const;
+      if (identity) await identity.register(...values, req.ip);
+      else {
+        security.limit('register:' + req.ip, 10, 15 * 60_000);
+        await security.register(...values);
+      }
       return { ok: true };
     }
 
     @Post('auth/verify')
     @HttpCode(200)
-    verify(@Req() req: Request, @Body() body: unknown) {
+    async verify(@Req() req: Request, @Body() body: unknown) {
       preauth(req);
-      security.verify(string(fields(body, ['token']).token, 43, 43));
+      const code = string(fields(body, ['token']).token, 43, 43);
+      if (identity) await identity.verify(code, req.ip);
+      else security.verify(code);
       return { ok: true };
     }
 
     @Post('auth/resend')
     @HttpCode(200)
-    resend(@Req() req: Request, @Body() body: unknown) {
+    async resend(@Req() req: Request, @Body() body: unknown) {
       preauth(req);
-      security.request(email(fields(body, ['email']).email), 'verify');
+      const address = email(fields(body, ['email']).email);
+      if (identity) await identity.request(address, 'verify', req.ip);
+      else security.request(address, 'verify');
       return { ok: true };
     }
 
     @Post('auth/recover')
     @HttpCode(200)
-    recover(@Req() req: Request, @Body() body: unknown) {
+    async recover(@Req() req: Request, @Body() body: unknown) {
       preauth(req);
-      security.request(email(fields(body, ['email']).email), 'reset');
+      const address = email(fields(body, ['email']).email);
+      if (identity) await identity.request(address, 'reset', req.ip);
+      else security.request(address, 'reset');
       return { ok: true };
     }
 
@@ -142,9 +164,14 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
     @HttpCode(200)
     async reset(@Req() req: Request, @Body() body: unknown) {
       preauth(req);
-      security.limit('reset:' + req.ip, 10, 15 * 60_000);
       const input = fields(body, ['token', 'password']);
-      await security.reset(string(input.token, 43, 43), password(input.password));
+      const code = string(input.token, 43, 43);
+      const nextPassword = password(input.password);
+      if (identity) await identity.reset(code, nextPassword, req.ip);
+      else {
+        security.limit('reset:' + req.ip, 10, 15 * 60_000);
+        await security.reset(code, nextPassword);
+      }
       return { ok: true };
     }
 
@@ -153,13 +180,15 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
     async login(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
       preauth(req);
       const input = fields(body, ['email', 'password']);
-      const result = await security.login(email(input.email), password(input.password, 1), req.ip, cookie(req, sessionCookie));
+      const backend = identity ?? security;
+      const result = await backend.login(email(input.email), password(input.password, 1), req.ip, cookie(req, sessionCookie));
       security.clearPreauth(cookie(req, preCookie));
       return respondSession(res, result);
     }
 
     @Get('auth/me')
     me(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+      requireDemo();
       res.append('Cache-Control', 'no-store');
       const session = security.session(cookie(req, sessionCookie));
       const { id, name, email } = security.verified(session);
@@ -186,7 +215,14 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
 
     @Post('auth/logout')
     @HttpCode(200)
-    logout(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    async logout(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+      if (identity) {
+        originCheck(req);
+        fields(body, []);
+        await identity.logout(cookie(req, sessionCookie) ?? '', req.headers['x-csrf-token']);
+        setCookie(res, sessionCookie, '', 0);
+        return { ok: true };
+      }
       const session = authenticated(req);
       fields(body, []);
       security.revoke(cookie(req, sessionCookie));
@@ -231,7 +267,10 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
     }
 
     @Get('teams')
-    teams(@Req() req: Request) { return companies.teams(security.session(cookie(req, sessionCookie))); }
+    teams(@Req() req: Request) {
+      requireDemo();
+      return companies.teams(security.session(cookie(req, sessionCookie)));
+    }
 
     @Post('teams')
     addTeam(@Req() req: Request, @Body() body: unknown) {
@@ -239,7 +278,10 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
     }
 
     @Get('members')
-    members(@Req() req: Request) { return companies.members(security.session(cookie(req, sessionCookie))); }
+    members(@Req() req: Request) {
+      requireDemo();
+      return companies.members(security.session(cookie(req, sessionCookie)));
+    }
 
     @Patch('members/:id')
     changeMember(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
@@ -257,7 +299,10 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
     }
 
     @Get('invitations')
-    invitations(@Req() req: Request) { return companies.invitations(security.session(cookie(req, sessionCookie))); }
+    invitations(@Req() req: Request) {
+      requireDemo();
+      return companies.invitations(security.session(cookie(req, sessionCookie)));
+    }
 
     @Post('invitations')
     invite(@Req() req: Request, @Body() body: unknown) {

@@ -5,6 +5,7 @@ import { digest, passwordHasher, same, token } from './crypto.js';
 
 const minute = 60_000;
 const hour = 60 * minute;
+const maxPreauthChallenges = 10_000;
 export type Role = 'ADMIN' | 'CONSULTANT';
 export interface User {
   id: string;
@@ -61,6 +62,10 @@ export class DemoSecurity {
 
   issuePreauth(previous?: string) {
     if (previous) this.preauth.delete(digest(previous));
+    if (this.preauth.size >= maxPreauthChallenges) {
+      const oldest = this.preauth.keys().next().value;
+      if (oldest !== undefined) this.preauth.delete(oldest);
+    }
     const raw = token();
     const csrf = token();
     this.preauth.set(digest(raw), { hash: digest(csrf), expires: this.now() + 15 * minute });
@@ -68,8 +73,11 @@ export class DemoSecurity {
   }
 
   requirePreauth(raw: string | undefined, csrf: string | undefined) {
-    const reference = raw ? this.preauth.get(digest(raw)) : undefined;
-    if (!reference || reference.expires <= this.now() || !csrf || !same(reference.hash, digest(csrf))) {
+    const key = raw ? digest(raw) : '';
+    const reference = this.preauth.get(key);
+    const now = this.now();
+    if (reference && reference.expires <= now) this.preauth.delete(key);
+    if (!reference || reference.expires <= now || !csrf || !same(reference.hash, digest(csrf))) {
       throw new ForbiddenException('Proteção CSRF inválida.');
     }
   }
