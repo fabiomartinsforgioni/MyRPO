@@ -15,4 +15,8 @@ O PostgreSQL foi provisionado em `myrpo-homolog`, na organização dedicada MyRP
 3. Completar a composição HTTP persistente, servir o bundle Angular pelo mesmo processo, habilitar os cookies `Secure` e desabilitar as rotas Alpha na homologação. O serviço Render deve escutar em `0.0.0.0` na porta de `PORT`. [Render Web Services](https://render.com/docs/web-services)
 4. Publicar o commit aprovado e validar sessão, CSRF, cadastro, recuperação, equipes, convites e isolamento pelo endereço HTTPS. Registrar a URL, o commit e os resultados na documentação da Sprint.
 
-Em 26/11/2026, as migrations 001–003 foram aplicadas e repetidas no Neon. O teste de isolamento passou com um papel descartável sem BYPASSRLS e os dados do teste foram revertidos. O modo `POSTGRES` permanece fechado e a URL da aplicação segue pendente. [Estado da Sprint 02](../04-arquitetura/sprint-02.md)
+Em 26/11/2026, o Neon ficou na migration 005. Os testes SQL confirmaram isolamento, troca de empresa e criação com vínculo, equipe padrão e auditoria. Os papéis temporários e os dados fictícios foram revertidos.
+
+O serviço Render deverá usar `npm ci --include=dev && npm run build:homolog` como comando de build e `npm run start:homolog` para iniciar. A API usa `PORT` e serve o bundle Angular na mesma origem. O Render deve receber `MYRPO_MODE=POSTGRES`, `MYRPO_ORIGIN` e os segredos `MYRPO_DATABASE_URL` e `MYRPO_CSRF_KEY`. A chave CSRF é composta por 32 bytes representados por 64 caracteres hexadecimais. A inicialização verifica TLS, o papel restrito e a versão das migrations.
+
+A URL da aplicação segue pendente. A composição hospedada ainda precisa do papel definitivo no Neon, do adaptador de entrega de códigos e do aceite ponta a ponta. [Estado da Sprint 02](../04-arquitetura/sprint-02.md)
