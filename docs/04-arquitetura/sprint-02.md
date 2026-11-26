@@ -37,7 +37,7 @@ O executor de migrations deve usar o proprietário das tabelas e da função que
 
 A composição HTTP persistente precisa de operações restritas para autenticação, listagem e troca de empresa, criação de empresa e ingresso por convite. Essas operações cruzam a fronteira do contexto empresarial selecionado. O servidor mantém o modo POSTGRES fechado até a composição e a homologação.
 
-O roteiro [tenant-isolation.sql](../../tests/postgres/tenant-isolation.sql) cobre ausência de contexto, leitura e inserção com vínculo ativo, tentativa de escrita em outra empresa, rollback do contexto e vínculo revogado. Executar somente em banco exclusivo de testes com usuário autorizado a criar e assumir o papel descartável do roteiro. O teste aguarda execução em PostgreSQL real. Também seguem pendentes a conferência com as concessões finais do runtime e os testes concorrentes.
+O roteiro [tenant-isolation.sql](../../tests/postgres/tenant-isolation.sql) cobre ausência de contexto, leitura e inserção com vínculo ativo, tentativa de escrita em outra empresa, rollback do contexto e vínculo revogado. Em 26/11/2026, esses cenários passaram no PostgreSQL do projeto `myrpo-homolog` com papel temporário. Os blocos do editor SQL adaptaram os comandos do `psql` para execução transacional. A consulta de conferência retornou versões 1, 2 e 3, sete tabelas com RLS, zero registros fictícios remanescentes nas tabelas consultadas e ausência do papel temporário. Seguem pendentes o teste com as concessões finais do runtime e os cenários concorrentes.
 
 Em 26/11/2026, a API recompilada passou nos 18 testes Node e o frontend gerou o bundle com Node 24.22.3. A verificação HTTP usou o DEMO em loopback. A Sprint segue sem URL de homologação.
 

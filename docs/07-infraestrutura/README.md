@@ -6,7 +6,7 @@ O build e a execução usam Node.js 24 LTS. O servidor de desenvolvimento escuta
 
 O destino proposto é um Web Service Render Free exclusivo para o MyRPO, com Angular e NestJS servidos na mesma origem HTTPS. A mesma origem simplifica o uso dos cookies de sessão e a validação de CSRF. Usar um workspace dedicado sem forma de pagamento cadastrada. A instância pausa após 15 minutos de inatividade. [Render Free](https://render.com/docs/free) · [HTTPS](https://render.com/docs/tls)
 
-O banco proposto é um projeto Neon Free exclusivo, com conexão TLS e papéis distintos para migrations e runtime. O plano tem 1 GB de armazenamento por projeto. Usar dados fictícios e guardar as credenciais no gerenciador de segredos do ambiente autorizado. [Neon Free](https://neon.com/blog/neon-free-plan-1-gb-per-project)
+O PostgreSQL foi provisionado em `myrpo-homolog`, na organização dedicada MyRPO Homolog (Neon Free, AWS Ohio). O banco `neondb` é exclusivo de homologação. A aplicação deve usar conexão TLS e um papel de runtime distinto do proprietário das migrations. Usar dados fictícios e guardar as credenciais no gerenciador de segredos do ambiente autorizado. [Console do MyRPO Homolog](https://console.neon.tech/app/org-green-mountain-44276484/projects)
 
 ### Ordem de liberação
 
@@ -15,4 +15,4 @@ O banco proposto é um projeto Neon Free exclusivo, com conexão TLS e papéis d
 3. Completar a composição HTTP persistente, servir o bundle Angular pelo mesmo processo, habilitar os cookies `Secure` e desabilitar as rotas Alpha na homologação. O serviço Render deve escutar em `0.0.0.0` na porta de `PORT`. [Render Web Services](https://render.com/docs/web-services)
 4. Publicar o commit aprovado e validar sessão, CSRF, cadastro, recuperação, equipes, convites e isolamento pelo endereço HTTPS. Registrar a URL, o commit e os resultados na documentação da Sprint.
 
-Em 26/11/2026, o modo `POSTGRES` permanece fechado, o banco ainda aguarda autorização e a URL de homologação segue pendente. [Estado da Sprint 02](../04-arquitetura/sprint-02.md)
+Em 26/11/2026, as migrations 001–003 foram aplicadas e repetidas no Neon. O teste de isolamento passou com um papel descartável sem BYPASSRLS e os dados do teste foram revertidos. O modo `POSTGRES` permanece fechado e a URL da aplicação segue pendente. [Estado da Sprint 02](../04-arquitetura/sprint-02.md)
