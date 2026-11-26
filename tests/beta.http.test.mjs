@@ -117,12 +117,18 @@ test('POSTGRES falha quando a persistência não está configurada', async () =>
 test('composição PostgreSQL injeta identidade e usa cookies seguros sem disponibilizar rotas Alpha', async t => {
   const calls = [];
   const origin = 'https://homolog.example.test';
+  const companyId = '00000000-0000-4000-8000-000000000201';
   const identity = {
     login: async (...args) => {
       calls.push(['login', ...args]);
       return { raw: 'sessao-ficticia', csrf: 'csrf-ficticio' };
     },
     logout: async (...args) => { calls.push(['logout', ...args]); },
+    profile: async raw => ({ raw, companies: [{ id: companyId }] }),
+    switchCompany: async (...args) => {
+      calls.push(['switch', ...args]);
+      return { raw: 'nova-sessao', csrf: 'novo-csrf', companyId, role: 'ADMIN' };
+    },
   };
   const app = await createApi({ logger: false }, { mode: 'POSTGRES', origin, identity });
   t.after(() => app.close());
@@ -153,11 +159,21 @@ test('composição PostgreSQL injeta identidade e usa cookies seguros sem dispon
   assert.equal((await fetch(base + 'health')).status, 200);
   assert.equal((await fetch(base + 'clientes')).status, 404);
   assert.equal((await fetch(base + 'beta/teams')).status, 404);
-  const logout = await send('auth/logout', {}, {
+  const profile = await fetch(base + 'beta/auth/me', { headers: { cookie: session.split(';')[0] } });
+  assert.equal(profile.headers.get('cache-control'), 'no-store');
+  assert.deepEqual((await profile.json()).companies, [{ id: companyId }]);
+  const switched = await send('companies/switch', { companyId }, {
     cookie: session.split(';')[0],
     'x-csrf-token': (await login.json()).csrf,
   });
+  assert.equal(switched.status, 200);
+  assert.deepEqual(await switched.json(), { csrf: 'novo-csrf', companyId, role: 'ADMIN' });
+  assert.deepEqual(calls.at(-1), ['switch', 'sessao-ficticia', 'csrf-ficticio', companyId]);
+  const logout = await send('auth/logout', {}, {
+    cookie: switched.headers.get('set-cookie').split(';')[0],
+    'x-csrf-token': 'novo-csrf',
+  });
   assert.equal(logout.status, 200);
   assert.match(logout.headers.get('set-cookie'), /Max-Age=0; Secure$/);
-  assert.deepEqual(calls.at(-1), ['logout', 'sessao-ficticia', 'csrf-ficticio']);
+  assert.deepEqual(calls.at(-1), ['logout', 'nova-sessao', 'novo-csrf']);
 });

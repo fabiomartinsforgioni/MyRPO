@@ -35,4 +35,13 @@ SELECT NOT EXISTS (
     INSERT INTO myrpo.schema_migrations (version) VALUES (3);
 \endif
 
+SELECT NOT EXISTS (
+    SELECT 1 FROM myrpo.schema_migrations WHERE version = 4
+) AS apply_session_companies \gset
+
+\if :apply_session_companies
+    \ir migrations/004_session_companies.sql
+    INSERT INTO myrpo.schema_migrations (version) VALUES (4);
+\endif
+
 COMMIT;

@@ -29,7 +29,9 @@ A redefinição persistente de senha foi preparada como uma operação transacio
 
 O serviço de identidade PostgreSQL reúne cadastro, verificação, reenvio, login, leitura de sessão, logout e recuperação. Ele aplica limites persistentes por IP e, quando aplicável, por e-mail. A chave CSRF de 32 bytes deve vir do mecanismo de segredos e ser estável entre reinícios. A troca da chave invalida sessões existentes. O envio de códigos depende de um adaptador injetado e ocorre depois da confirmação da transação.
 
-A composição HTTP injetável encaminha cadastro, verificação, reenvio, login, logout e recuperação ao serviço de identidade quando configurada para PostgreSQL. Ela exige origem HTTPS exata, usa cookies `__Host-` com `Secure` e mantém as rotas Alpha fora dessa composição. O teste HTTP em loopback verifica esses controles com serviço simulado. A inicialização hospedada aguarda perfil, empresas, equipes, convites, demais operações de conta, entrega de e-mail, papel de runtime e testes concorrentes no Neon.
+A composição HTTP injetável encaminha cadastro, verificação, reenvio, login, logout, recuperação, perfil e troca de empresa ao serviço de identidade quando configurada para PostgreSQL. Ela exige origem HTTPS exata, usa cookies `__Host-` com `Secure` e mantém as rotas Alpha fora dessa composição. O teste HTTP em loopback verifica esses controles com serviço simulado. A inicialização hospedada aguarda criação de empresas, equipes, membros, convites, demais operações de conta, entrega de e-mail, papel de runtime e testes concorrentes no Neon.
+
+A migration [004_session_companies.sql](../../db/migrations/004_session_companies.sql) lista vínculos ativos restritos ao titular da sessão válida. Em 26/11/2026, a migration foi aplicada em `myrpo-homolog`. Com papel temporário e duas empresas fictícias, o teste SQL confirmou a listagem restrita, a rejeição da troca fora do vínculo e a invalidação do token antigo após a troca autorizada. Os dados e o papel de teste foram revertidos.
 
 ### RLS antes do piloto
 

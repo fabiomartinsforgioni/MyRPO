@@ -1,16 +1,17 @@
-import { ForbiddenException, HttpException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, HttpException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 // @ts-ignore -- módulos nativos do Node 24 sem declarações neste projeto.
 import { createHash, createHmac } from 'node:crypto';
 import { passwordHasher, same, token } from './crypto.js';
 import type { PasswordHasher } from './crypto.js';
 import {
   issuePostgresSession, PostgresChallenges, PostgresRateLimits, PostgresSessions, resetPostgresPassword,
-  touchPostgresSession, transaction,
+  setTenantContext, touchPostgresSession, transaction,
 } from './postgres.js';
 import type { Pool } from './postgres.js';
 import type { Mail } from './security.js';
 
 const opaque = /^[A-Za-z0-9_-]{43}$/;
+const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const quarterHour = 15 * 60_000;
 
 function hash(value: string): Uint8Array {
@@ -146,6 +147,62 @@ export class PostgresIdentity {
   async logout(raw: string, csrf: string | undefined) {
     await this.session(raw, csrf);
     await transaction(this.pool, db => new PostgresSessions(db).revoke(hash(raw), 'logout'));
+  }
+
+  async profile(raw: string) {
+    const session = await this.session(raw);
+    return transaction(this.pool, async db => {
+      const tokenHash = hash(raw);
+      const account = await db.query<{ id: string; name: string; email: string }>(
+        `SELECT u.id, u.display_name AS name, u.email FROM myrpo.users AS u
+           JOIN myrpo.sessions AS s ON s.user_id = u.id
+          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
+            AND u.deactivated_at IS NULL AND u.email_verified_at IS NOT NULL`,
+        [tokenHash],
+      );
+      const user = account.rows[0];
+      if (!user) throw new UnauthorizedException('Sessão inválida.');
+      const linked = await db.query<{ id: string; name: string; role: 'ADMIN' | 'CONSULTANT' }>(
+        `SELECT company_id AS id, company_name AS name, upper(member_role) AS role
+           FROM myrpo.session_companies($1)`,
+        [tokenHash],
+      );
+      return { ...user, csrf: session.csrf, companyId: session.active_company_id ?? undefined, companies: linked.rows };
+    });
+  }
+
+  async switchCompany(raw: string, suppliedCsrf: string | undefined, requestedCompanyId: string) {
+    const session = await this.session(raw, suppliedCsrf);
+    if (!uuid.test(requestedCompanyId)) throw new NotFoundException('Empresa indisponível.');
+    const companyId = requestedCompanyId.toLowerCase();
+    const nextRaw = token();
+    const csrf = this.csrf(nextRaw);
+    const role = await transaction(this.pool, async db => {
+      await setTenantContext(db, session.user_id, companyId);
+      const changed = await db.query<{ role: 'ADMIN' | 'CONSULTANT' }>(
+        `UPDATE myrpo.sessions AS s
+            SET active_company_id = m.company_id, token_hash = $4, csrf_hash = $5,
+                last_activity_at = clock_timestamp()
+           FROM myrpo.company_memberships AS m
+           JOIN myrpo.companies AS c ON c.id = m.company_id
+           JOIN myrpo.users AS u ON u.id = m.user_id
+          WHERE m.company_id = $1 AND m.user_id = $2 AND m.deactivated_at IS NULL
+            AND c.deactivated_at IS NULL AND u.deactivated_at IS NULL AND u.email_verified_at IS NOT NULL
+            AND s.user_id = m.user_id AND s.token_hash = $3 AND s.revoked_at IS NULL
+            AND s.expires_at > clock_timestamp() AND s.last_activity_at > clock_timestamp() - interval '30 minutes'
+          RETURNING upper(m.role) AS role`,
+        [companyId, session.user_id, hash(raw), hash(nextRaw), hash(csrf)],
+      );
+      const membership = changed.rows[0];
+      if (!membership) throw new NotFoundException('Empresa indisponível.');
+      await db.query(
+        `INSERT INTO myrpo.audit_logs (company_id, actor_user_id, action, entity_type, entity_id, correlation_id, outcome)
+         VALUES ($1, $2, 'COMPANY_SWITCHED', 'company', $1::uuid::text, $3, 'success')`,
+        [companyId, session.user_id, globalThis.crypto.randomUUID()],
+      );
+      return membership.role;
+    });
+    return { raw: nextRaw, csrf, companyId, role };
   }
 
   async reset(raw: string, password: string, ip: string) {

@@ -12,7 +12,7 @@ export interface BetaOptions {
   mode: 'DEMO' | 'POSTGRES';
   origin?: string;
   deliver?: (mail: Mail) => void;
-  identity?: Pick<PostgresIdentity, 'login' | 'logout' | 'register' | 'request' | 'reset' | 'verify'>;
+  identity?: Pick<PostgresIdentity, 'login' | 'logout' | 'profile' | 'register' | 'request' | 'reset' | 'switchCompany' | 'verify'>;
 }
 type Request = { headers: Record<string, string | undefined>; ip: string };
 type Response = { append(name: string, value: string): void };
@@ -188,8 +188,8 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
 
     @Get('auth/me')
     me(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-      requireDemo();
       res.append('Cache-Control', 'no-store');
+      if (identity) return identity.profile(cookie(req, sessionCookie) ?? '');
       const session = security.session(cookie(req, sessionCookie));
       const { id, name, email } = security.verified(session);
       return { id, name, email, csrf: session.csrf, companyId: session.companyId, companies: companies.list(id) };
@@ -258,7 +258,13 @@ export function betaModule(options: BetaOptions, alphaControllers: Type[]) {
 
     @Post('companies/switch')
     @HttpCode(200)
-    switch(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    async switch(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+      if (identity) {
+        originCheck(req);
+        const id = string(fields(body, ['companyId']).companyId, 1, 36);
+        const result = await identity.switchCompany(cookie(req, sessionCookie) ?? '', req.headers['x-csrf-token'], id);
+        return { ...respondSession(res, result), companyId: result.companyId, role: result.role };
+      }
       const session = authenticated(req);
       const { company, member } = companies.scope(session, string(fields(body, ['companyId']).companyId, 1, 36));
       const result = security.rotate(cookie(req, sessionCookie)!, { ...session, companyId: company.id });

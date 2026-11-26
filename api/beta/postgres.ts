@@ -41,7 +41,7 @@ export async function tenantTransaction<Result>(
   });
 }
 
-function setTenantContext(db: Connection, userId: string, companyId: string | null) {
+export function setTenantContext(db: Connection, userId: string, companyId: string | null) {
   return db.query(
     "SELECT set_config('app.user_id', $1, true), set_config('app.company_id', $2, true)",
     [userId, companyId ?? ''],
