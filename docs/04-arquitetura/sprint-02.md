@@ -29,7 +29,15 @@ A redefinição persistente de senha foi preparada como uma operação transacio
 
 ### RLS antes do piloto
 
-Aplicar RLS a empresas, vínculos, equipes, convites, auditoria empresarial e tabelas operacionais futuras. A conexão do pool deve permanecer dedicada à transação e receber o contexto com `set_config(..., true)`. A política deve validar empresa e vínculo ativo e usar `USING` e `WITH CHECK`, com negação na ausência de contexto. O papel da aplicação não terá ownership, superusuário ou BYPASSRLS. Separar operações globais de autenticação, criação de empresa e ingresso por convite. Homologar com o papel real, concorrência, rollback e reutilização de conexões.
+A migration [003_tenant_isolation.sql](../../db/migrations/003_tenant_isolation.sql) define políticas de RLS para empresas, vínculos, equipes, convites e auditoria empresarial. As políticas exigem a empresa selecionada e vínculo ativo. A conexão do pool deve permanecer dedicada à transação e receber a identidade autenticada e a empresa com `set_config(..., true)`.
+
+O executor de migrations deve usar o proprietário das tabelas e da função que consulta o vínculo. O papel de runtime deve ser separado, sem ownership, superusuário, BYPASSRLS ou acesso ao papel proprietário. Ele precisa de concessões explícitas para executar a função de escopo e operar nas tabelas necessárias. As permissões de administrador e consultor continuam sujeitas às regras da aplicação.
+
+A composição HTTP persistente precisa de operações restritas para autenticação, listagem e troca de empresa, criação de empresa e ingresso por convite. Essas operações cruzam a fronteira do contexto empresarial selecionado. O servidor mantém o modo POSTGRES fechado até a composição e a homologação.
+
+O roteiro [tenant-isolation.sql](../../tests/postgres/tenant-isolation.sql) cobre ausência de contexto, leitura e inserção com vínculo ativo, tentativa de escrita em outra empresa, rollback do contexto e vínculo revogado. Executar somente em banco exclusivo de testes com usuário autorizado a criar e assumir o papel descartável do roteiro. O teste aguarda execução em PostgreSQL real. Também seguem pendentes a conferência com as concessões finais do runtime e os testes concorrentes.
+
+Em 26/11/2026, a API recompilada passou nos 15 testes Node e o frontend gerou o bundle com Node 24.22.3. A verificação HTTP usou o DEMO em loopback. A Sprint segue sem URL de homologação.
 
 ### Horas e anexos
 

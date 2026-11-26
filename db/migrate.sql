@@ -26,4 +26,13 @@ SELECT NOT EXISTS (
     INSERT INTO myrpo.schema_migrations (version) VALUES (2);
 \endif
 
+SELECT NOT EXISTS (
+    SELECT 1 FROM myrpo.schema_migrations WHERE version = 3
+) AS apply_tenant_isolation \gset
+
+\if :apply_tenant_isolation
+    \ir migrations/003_tenant_isolation.sql
+    INSERT INTO myrpo.schema_migrations (version) VALUES (3);
+\endif
+
 COMMIT;

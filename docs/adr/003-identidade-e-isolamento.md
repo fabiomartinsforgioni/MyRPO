@@ -1,7 +1,8 @@
 # ADR 003 · Identidade, sessões e isolamento multiempresa
 
-**Data** · 25/11/2026  
-**Status** · Aceita para DEMO. PostgreSQL e RLS aguardam homologação.
+**Data** · 25/11/2026
+
+**Status** · Aceita para DEMO. A migration de RLS foi preparada e aguarda homologação em PostgreSQL.
 
 ## Contexto
 
@@ -21,7 +22,7 @@ A sessão no servidor permite revogação imediata e troca de empresa sem confia
 
 ## Alternativas consideradas
 
-JWT exigiria um mecanismo adicional de revogação e validação atual de vínculos. Bancos separados por empresa aumentariam a operação inicial. O banco compartilhado com constraints compostas e futura RLS atende à arquitetura acordada.
+JWT exigiria um mecanismo adicional de revogação e validação atual de vínculos. Bancos separados por empresa aumentariam a operação inicial. O esquema compartilhado combina constraints compostas e RLS. A função das políticas usa o proprietário das migrations para consultar o vínculo sem recursão e tem a execução pública revogada. O runtime só deve receber concessões explícitas e não pode assumir o papel proprietário.
 
 ## Consequências
 
