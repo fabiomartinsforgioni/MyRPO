@@ -25,7 +25,9 @@ Em loopback, defina `MYRPO_MODE=DEMO` e use `npm run start:api` com Node 24. No 
 
 A migration `002_identity.sql` acrescenta sessões, desafios, limites de tentativas, destinatário e equipes de convites e auditoria global. Foram preparados contratos de pool e repositórios parciais para sessões, desafios, limitação de tentativas e alterações de vínculo e aceite e revogação de convites. O modo POSTGRES permanece fechado enquanto faltar composição persistente. A homologação deve executar os SQLs de fundação e identidade em banco exclusivo, repetir o executor e testar falha, rollback, concorrência e privilégios.
 
-A redefinição persistente de senha foi preparada como uma operação transacional. Ela trava a conta elegível antes de consumir o desafio, grava o novo hash, revoga todas as sessões da conta e registra a auditoria de sucesso. Os testes Node exercitam confirmação e rollback com conexão simulada. O teste HTTP do DEMO cobre duas sessões revogadas, rejeição do token reutilizado e autenticação com a nova senha. A composição HTTP persistente e a homologação de concorrência entre redefinição, emissão de desafio e login seguem pendentes.
+A redefinição persistente de senha foi preparada como uma operação transacional. Ela trava a conta elegível antes de consumir o desafio, grava o novo hash, revoga todas as sessões da conta e registra a auditoria de sucesso. A emissão de sessão usa a mesma trava e confirma que o hash validado pelo serviço continua atual. A renovação da atividade instala, na própria transação, a empresa e o usuário obtidos da sessão persistida. A atualização revalida sessão, conta, vínculo e, para mutações, o digest CSRF fornecido pelo serviço.
+
+Os testes Node exercitam esses contratos, confirmação e rollback com conexão simulada. O teste HTTP do DEMO cobre duas sessões revogadas, rejeição do token reutilizado e autenticação com a nova senha. A composição HTTP persistente e a homologação de concorrência entre redefinição, emissão de desafio e login seguem pendentes.
 
 ### RLS antes do piloto
 
@@ -37,7 +39,7 @@ A composição HTTP persistente precisa de operações restritas para autentica�
 
 O roteiro [tenant-isolation.sql](../../tests/postgres/tenant-isolation.sql) cobre ausência de contexto, leitura e inserção com vínculo ativo, tentativa de escrita em outra empresa, rollback do contexto e vínculo revogado. Executar somente em banco exclusivo de testes com usuário autorizado a criar e assumir o papel descartável do roteiro. O teste aguarda execução em PostgreSQL real. Também seguem pendentes a conferência com as concessões finais do runtime e os testes concorrentes.
 
-Em 26/11/2026, a API recompilada passou nos 15 testes Node e o frontend gerou o bundle com Node 24.22.3. A verificação HTTP usou o DEMO em loopback. A Sprint segue sem URL de homologação.
+Em 26/11/2026, a API recompilada passou nos 18 testes Node e o frontend gerou o bundle com Node 24.22.3. A verificação HTTP usou o DEMO em loopback. A Sprint segue sem URL de homologação.
 
 ### Horas e anexos
 

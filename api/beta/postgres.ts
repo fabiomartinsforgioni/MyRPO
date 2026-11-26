@@ -36,12 +36,16 @@ export async function tenantTransaction<Result>(
   pool: Pool, context: TenantContext, run: (db: Connection) => Promise<Result>,
 ) {
   return transaction(pool, async db => {
-    await db.query(
-      "SELECT set_config('app.user_id', $1, true), set_config('app.company_id', $2, true)",
-      [context.userId, context.companyId],
-    );
+    await setTenantContext(db, context.userId, context.companyId);
     return run(db);
   });
+}
+
+function setTenantContext(db: Connection, userId: string, companyId: string | null) {
+  return db.query(
+    "SELECT set_config('app.user_id', $1, true), set_config('app.company_id', $2, true)",
+    [userId, companyId ?? ''],
+  );
 }
 
 export interface SessionRow {
@@ -68,12 +72,33 @@ export class PostgresSessions {
     return result.rows[0];
   }
 
-  async touch(tokenHash: Uint8Array) {
-    const result = await this.db.query<SessionRow>(
+  revoke(tokenHash: Uint8Array, reason: string) {
+    return this.db.query(
+      'UPDATE myrpo.sessions SET revoked_at = now(), revocation_reason = $2 WHERE token_hash = $1 AND revoked_at IS NULL',
+      [tokenHash, reason],
+    );
+  }
+}
+
+export function touchPostgresSession(pool: Pool, tokenHash: Uint8Array, csrfHash?: Uint8Array) {
+  return transaction(pool, async db => {
+    const lookup = await db.query<Pick<SessionRow, 'user_id' | 'active_company_id'>>(
+      `SELECT user_id, active_company_id FROM myrpo.sessions
+        WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > clock_timestamp()`,
+      [tokenHash],
+    );
+    const session = lookup.rows[0];
+    if (!session) return undefined;
+
+    // O contexto vem da sessão persistida e expira junto com a transação.
+    await setTenantContext(db, session.user_id, session.active_company_id);
+    const result = await db.query<SessionRow>(
       `UPDATE myrpo.sessions AS s
          SET last_activity_at = clock_timestamp()
         FROM myrpo.users AS u
        WHERE s.token_hash = $1 AND s.user_id = u.id
+         AND s.user_id = $2 AND s.active_company_id IS NOT DISTINCT FROM $3
+         AND ($4::bytea IS NULL OR s.csrf_hash = $4)
          AND u.deactivated_at IS NULL AND u.email_verified_at IS NOT NULL
          AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
          AND s.last_activity_at > clock_timestamp() - interval '30 minutes'
@@ -83,17 +108,35 @@ export class PostgresSessions {
            WHERE m.company_id = s.active_company_id AND m.user_id = s.user_id
              AND m.deactivated_at IS NULL AND c.deactivated_at IS NULL))
       RETURNING s.id, s.user_id, s.active_company_id, s.authenticated_at, s.expires_at`,
-      [tokenHash],
+      [tokenHash, session.user_id, session.active_company_id, csrfHash ?? null],
     );
     return result.rows[0];
-  }
+  });
+}
 
-  revoke(tokenHash: Uint8Array, reason: string) {
-    return this.db.query(
-      'UPDATE myrpo.sessions SET revoked_at = now(), revocation_reason = $2 WHERE token_hash = $1 AND revoked_at IS NULL',
-      [tokenHash, reason],
+export function issuePostgresSession(pool: Pool, input: {
+  userId: string; verifiedPasswordHash: string; tokenHash: Uint8Array; csrfHash: Uint8Array;
+}) {
+  return transaction(pool, async db => {
+    // A redefinição usa a mesma trava para serializar a emissão e a revogação.
+    const account = await db.query<{ authenticated_at: Date }>(
+      `SELECT clock_timestamp() AS authenticated_at FROM myrpo.users
+        WHERE id = $1 AND password_hash = $2
+          AND email_verified_at IS NOT NULL AND deactivated_at IS NULL
+        FOR NO KEY UPDATE`,
+      [input.userId, input.verifiedPasswordHash],
     );
-  }
+    const authenticatedAt = account.rows[0]?.authenticated_at;
+    if (!authenticatedAt) return undefined;
+
+    return new PostgresSessions(db).create({
+      userId: input.userId,
+      tokenHash: input.tokenHash,
+      csrfHash: input.csrfHash,
+      authenticatedAt,
+      expiresAt: new Date(authenticatedAt.getTime() + 12 * 60 * 60_000),
+    });
+  });
 }
 
 export class PostgresChallenges {
